@@ -1,0 +1,7 @@
+{
+  "name": "Family OS",
+  "description": "A centralized family coordination and schoolwork dashboard designed to bring calm to household chaos. Manage assignments, chores, and schedules with Notion-like simplicity.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
