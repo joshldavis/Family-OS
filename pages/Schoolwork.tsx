@@ -39,6 +39,7 @@ const Schoolwork: React.FC<SchoolworkProps> = ({ students, assignments, setAssig
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
 
   // Helper for timezone-safe date display
@@ -115,6 +116,22 @@ const Schoolwork: React.FC<SchoolworkProps> = ({ students, assignments, setAssig
     }
     
     setIsModalOpen(false);
+  };
+
+  const handleSaveStudent = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const newStudent: Student = {
+      id: `s-${Date.now()}`,
+      familyId: 'fam-1',
+      name: formData.get('name') as string,
+      grade: formData.get('grade') as string,
+      notes: formData.get('notes') as string,
+    };
+
+    setStudents(prev => [...prev, newStudent]);
+    setIsStudentModalOpen(false);
   };
 
   const handleAIScanResult = (extractedList: any[]) => {
@@ -354,7 +371,7 @@ const Schoolwork: React.FC<SchoolworkProps> = ({ students, assignments, setAssig
               </div>
               <h3 className="font-bold text-slate-900 text-lg">{student.name}</h3>
               <p className="text-indigo-600 text-sm font-medium">{student.grade}</p>
-              <p className="text-slate-500 text-sm mt-3">{student.notes}</p>
+              <p className="text-slate-500 text-sm mt-3 line-clamp-2">{student.notes}</p>
               
               <div className="mt-6 pt-6 border-t flex justify-between">
                 <div className="text-center flex-1">
@@ -372,10 +389,60 @@ const Schoolwork: React.FC<SchoolworkProps> = ({ students, assignments, setAssig
               </div>
             </div>
           ))}
-          <button className="border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all group">
+          <button
+            onClick={() => setIsStudentModalOpen(true)}
+            className="border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all group"
+          >
             <UserPlus size={32} className="group-hover:scale-110 transition-transform" />
             <span className="font-semibold">Add Student</span>
           </button>
+        </div>
+      )}
+
+      {/* Student Create Modal */}
+      {isStudentModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b flex justify-between items-center bg-indigo-50/30">
+              <h2 className="text-xl font-bold text-slate-900">Add New Student</h2>
+              <button onClick={() => setIsStudentModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveStudent} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Full Name</label>
+                <input
+                  name="name"
+                  required
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  placeholder="e.g. Leo Miller"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Grade / Class</label>
+                <input
+                  name="grade"
+                  required
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  placeholder="e.g. 5th Grade"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Notes</label>
+                <textarea
+                  name="notes"
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all h-24 resize-none"
+                  placeholder="Any specific goals or focus areas..."
+                />
+              </div>
+              <div className="pt-4">
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md">
+                  Add Student
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

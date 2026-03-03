@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Chore, Status, User, Role, Frequency } from '../types';
-import { Plus, CheckSquare, Square, Trash2, Calendar, Clock, User as UserIcon, Sparkles } from 'lucide-react';
+import { Plus, CheckSquare, Square, Trash2, Calendar, Clock, User as UserIcon, Sparkles, X } from 'lucide-react';
 import AIScanModal from '../components/AIScanModal';
 
 interface ChoresProps {
@@ -13,6 +13,7 @@ interface ChoresProps {
 const Chores: React.FC<ChoresProps> = ({ chores, setChores, users }) => {
   const [filterUser, setFilterUser] = useState<string>('all');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const toggleChore = (id: string) => {
@@ -30,6 +31,23 @@ const Chores: React.FC<ChoresProps> = ({ chores, setChores, users }) => {
       setChores(prev => prev.filter(c => c.id !== id));
       setDeletingId(null);
     }, 300);
+  };
+
+  const handleSaveChore = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const newChore: Chore = {
+      id: `c-${Date.now()}`,
+      assigneeId: formData.get('assigneeId') as string,
+      title: formData.get('title') as string,
+      frequency: formData.get('frequency') as Frequency,
+      dueDate: formData.get('dueDate') as string,
+      status: Status.NOT_STARTED
+    };
+
+    setChores(prev => [newChore, ...prev]);
+    setIsModalOpen(false);
   };
 
   const handleAIScanResult = (extractedList: any[]) => {
@@ -108,7 +126,10 @@ const Chores: React.FC<ChoresProps> = ({ chores, setChores, users }) => {
             <option value="all">Everyone</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
-          <button className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
+          >
             <Plus size={18} />
             Add Chore
           </button>
@@ -146,6 +167,67 @@ const Chores: React.FC<ChoresProps> = ({ chores, setChores, users }) => {
           </div>
         </section>
       </div>
+
+      {/* Add Chore Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b flex justify-between items-center bg-indigo-50/30">
+              <h2 className="text-xl font-bold text-slate-900">Add New Chore</h2>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveChore} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Chore Title</label>
+                <input
+                  name="title"
+                  required
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  placeholder="e.g. Mow the Lawn"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Assign To</label>
+                <select
+                  name="assigneeId"
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                >
+                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    name="dueDate"
+                    required
+                    defaultValue={new Date().toISOString().split('T')[0]}
+                    className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Frequency</label>
+                  <select
+                    name="frequency"
+                    className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  >
+                    <option value={Frequency.ONE_TIME}>{Frequency.ONE_TIME}</option>
+                    <option value={Frequency.WEEKLY}>{Frequency.WEEKLY}</option>
+                  </select>
+                </div>
+              </div>
+              <div className="pt-4">
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md">
+                  Add Chore
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <AIScanModal 
         isOpen={isScannerOpen} 

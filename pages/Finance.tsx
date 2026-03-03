@@ -11,7 +11,8 @@ import {
   ArrowDownRight,
   Filter,
   DollarSign,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 import AIScanModal from '../components/AIScanModal';
 
@@ -34,6 +35,9 @@ const Finance: React.FC<FinanceProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'budget' | 'transactions' | 'savings'>('budget');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [isSavingsModalOpen, setIsSavingsModalOpen] = useState(false);
 
   const monthlyIncome = useMemo(() => 
     transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0), 
@@ -60,6 +64,59 @@ const Finance: React.FC<FinanceProps> = ({
     setTransactions(prev => [newTransaction, ...prev]);
   };
 
+  const handleSaveTransaction = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const newTransaction: Transaction = {
+      id: `t-${Date.now()}`,
+      familyId: 'fam-1',
+      date: formData.get('date') as string,
+      description: formData.get('description') as string,
+      amount: parseFloat(formData.get('amount') as string),
+      category: formData.get('category') as string,
+      type: formData.get('type') as 'income' | 'expense'
+    };
+
+    setTransactions(prev => [newTransaction, ...prev]);
+    setIsTransactionModalOpen(false);
+  };
+
+  const handleSaveBudget = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const colors = ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#8b5cf6', '#06b6d4'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const newBudget: BudgetCategory = {
+      id: `b-${Date.now()}`,
+      name: formData.get('name') as string,
+      limit: parseFloat(formData.get('limit') as string),
+      spent: 0,
+      color: randomColor
+    };
+
+    setBudgets(prev => [...prev, newBudget]);
+    setIsBudgetModalOpen(false);
+  };
+
+  const handleSaveSavingsGoal = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const newGoal: SavingsGoal = {
+      id: `sg-${Date.now()}`,
+      name: formData.get('name') as string,
+      targetAmount: parseFloat(formData.get('targetAmount') as string),
+      currentAmount: parseFloat(formData.get('currentAmount') as string) || 0,
+      dueDate: formData.get('dueDate') as string || undefined,
+    };
+
+    setSavings(prev => [...prev, newGoal]);
+    setIsSavingsModalOpen(false);
+  };
+
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -75,7 +132,10 @@ const Finance: React.FC<FinanceProps> = ({
             <Sparkles size={18} />
             Scan Receipt
           </button>
-          <button className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm text-sm">
+          <button
+            onClick={() => setIsTransactionModalOpen(true)}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm text-sm"
+          >
             <Plus size={18} />
             Log Transaction
           </button>
@@ -168,7 +228,10 @@ const Finance: React.FC<FinanceProps> = ({
               </div>
             );
           })}
-          <button className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-300 hover:text-indigo-600 transition-all group">
+          <button
+            onClick={() => setIsBudgetModalOpen(true)}
+            className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-300 hover:text-indigo-600 transition-all group"
+          >
             <Plus size={32} className="mb-2 group-hover:scale-110 transition-transform" />
             <span className="font-bold">New Category</span>
           </button>
@@ -242,10 +305,187 @@ const Finance: React.FC<FinanceProps> = ({
               </div>
             );
           })}
-          <button className="border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-300 hover:text-indigo-600 transition-all group">
+          <button
+            onClick={() => setIsSavingsModalOpen(true)}
+            className="border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-300 hover:text-indigo-600 transition-all group"
+          >
             <Plus size={40} className="mb-2 group-hover:scale-110 transition-transform" />
             <span className="font-bold text-lg">Create New Goal</span>
           </button>
+        </div>
+      )}
+
+      {/* Transaction Modal */}
+      {isTransactionModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b flex justify-between items-center bg-indigo-50/30">
+              <h2 className="text-xl font-bold text-slate-900">Log Transaction</h2>
+              <button onClick={() => setIsTransactionModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveTransaction} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Description</label>
+                <input
+                  name="description"
+                  required
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  placeholder="e.g. Grocery Store"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Amount ($)</label>
+                  <input
+                    name="amount"
+                    type="number"
+                    step="0.01"
+                    required
+                    className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Type</label>
+                  <select
+                    name="type"
+                    className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Date</label>
+                  <input
+                    type="date"
+                    name="date"
+                    required
+                    defaultValue={new Date().toISOString().split('T')[0]}
+                    className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Category</label>
+                  <input
+                    name="category"
+                    required
+                    className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                    placeholder="e.g. Groceries"
+                  />
+                </div>
+              </div>
+              <div className="pt-4">
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md">
+                  Save Transaction
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Savings Goal Modal */}
+      {isSavingsModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b flex justify-between items-center bg-indigo-50/30">
+              <h2 className="text-xl font-bold text-slate-900">New Savings Goal</h2>
+              <button onClick={() => setIsSavingsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveSavingsGoal} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Goal Name</label>
+                <input
+                  name="name"
+                  required
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  placeholder="e.g. New Car"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Target Amount ($)</label>
+                  <input
+                    name="targetAmount"
+                    type="number"
+                    required
+                    className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Starting Amount ($)</label>
+                  <input
+                    name="currentAmount"
+                    type="number"
+                    defaultValue="0"
+                    className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Target Date (Optional)</label>
+                <input
+                  type="date"
+                  name="dueDate"
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                />
+              </div>
+              <div className="pt-4">
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md">
+                  Create Goal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Budget Modal */}
+      {isBudgetModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b flex justify-between items-center bg-indigo-50/30">
+              <h2 className="text-xl font-bold text-slate-900">New Budget Category</h2>
+              <button onClick={() => setIsBudgetModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveBudget} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Category Name</label>
+                <input
+                  name="name"
+                  required
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  placeholder="e.g. Dining Out"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Monthly Limit ($)</label>
+                <input
+                  name="limit"
+                  type="number"
+                  required
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="pt-4">
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md">
+                  Create Category
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
