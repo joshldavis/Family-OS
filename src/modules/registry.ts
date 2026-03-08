@@ -30,6 +30,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   calendar,
   finance,
   mealPlanning,
+  wellness,
   shopping,
   allowance,
   pinboard,
@@ -37,7 +38,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   emailIntelligence,
   insights,
   aiScan,
-  wellness,
   goals,
   settings,
 ];
