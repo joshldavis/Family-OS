@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { CalendarEvent, Assignment, Status } from '../types';
 import {
   MapPin,
@@ -36,6 +36,15 @@ const Calendar: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [eventFormError, setEventFormError] = useState<string | null>(null);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up pending sync timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    };
+  }, []);
 
   // Merge standard events with assignments for a unified view
   const mergedItems = useMemo(() => {
@@ -78,8 +87,8 @@ const Calendar: React.FC = () => {
     if (!isGoogleLinked) return;
     setIsSyncing(true);
 
-    // Simulate API call to Google Calendar
-    setTimeout(() => {
+    // Simulate API call to Google Calendar — replace with real Google Calendar API in Phase 3
+    syncTimeoutRef.current = setTimeout(() => {
       const now = new Date().toISOString();
       const googleEvent: CalendarEvent = {
         id: `google-${Date.now()}`,
@@ -92,13 +101,14 @@ const Calendar: React.FC = () => {
         createdAt: now,
       };
 
-      // Remove old google events, then add the new one
+      // Note: events snapshot is used here; for multi-user real-time use cases
+      // replace with Phase 3 Supabase real-time approach
       const filtered = events.filter(e => e.provider !== 'google');
       dispatch({ type: 'HYDRATE', payload: { events: [...filtered, googleEvent] } });
 
       setIsSyncing(false);
       setSyncComplete(true);
-      setTimeout(() => setSyncComplete(false), 3000);
+      syncTimeoutRef.current = setTimeout(() => setSyncComplete(false), 3000);
     }, 2000);
   };
 
@@ -110,6 +120,13 @@ const Calendar: React.FC = () => {
     const endTime = formData.get('endTime') as string;
     const syncToGoogle = formData.get('syncToGoogle') === 'on';
     const now = new Date().toISOString();
+
+    // Validate end time is after start time
+    if (endTime && startTime && endTime <= startTime) {
+      setEventFormError('End time must be after start time.');
+      return;
+    }
+    setEventFormError(null);
 
     const newEvent: CalendarEvent = {
       id: `e-${Date.now()}`,
@@ -344,6 +361,12 @@ const Calendar: React.FC = () => {
                     </div>
                   </label>
                 </div>
+              )}
+
+              {eventFormError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2">
+                  {eventFormError}
+                </p>
               )}
 
               <div className="pt-4">

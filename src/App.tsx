@@ -134,7 +134,6 @@ const AppInner: React.FC = () => {
     scanIntervalMinutes: 60,
   });
   const [lastScanResult,   setLastScanResult]   = useLocalStorage<EmailScanResult | null>('family_os_last_scan', null);
-  const [isScanning,       setIsScanning]       = useState(false);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -282,7 +281,7 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
       case 'email-intelligence':
         return {
           actionItems, behaviorUpdates, announcements, classifiedEmails,
-          emailScanConfig, lastScanResult, isScanning, students: state.students,
+          emailScanConfig, lastScanResult, students: state.students,
           events: state.events, assignments: state.assignments,
           familyName: activeFamily.name,
           onActionItemDone: handleActionItemDone,

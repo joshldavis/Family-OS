@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShoppingList, ShoppingItem, ShoppingCategory } from '../types';
 import {
   ShoppingCart,
@@ -42,6 +42,13 @@ const ShoppingLists: React.FC<ShoppingListsProps> = ({ shoppingLists, setShoppin
   const [newItemForm, setNewItemForm] = useState({ name: '', amount: '', category: 'Other' as ShoppingCategory });
   const [isAddingItem, setIsAddingItem] = useState(false);
 
+  // Sync activeListId when lists load after initial mount (e.g. from persistence)
+  useEffect(() => {
+    if (activeListId === null && shoppingLists.length > 0) {
+      setActiveListId(shoppingLists[0].id);
+    }
+  }, [shoppingLists, activeListId]);
+
   const activeList = shoppingLists.find(l => l.id === activeListId);
 
   const createList = () => {
@@ -60,11 +67,13 @@ const ShoppingLists: React.FC<ShoppingListsProps> = ({ shoppingLists, setShoppin
   };
 
   const deleteList = (id: string) => {
-    setShoppingLists(prev => prev.filter(l => l.id !== id));
-    if (activeListId === id) {
-      const remaining = shoppingLists.filter(l => l.id !== id);
-      setActiveListId(remaining.length > 0 ? remaining[0].id : null);
-    }
+    setShoppingLists(prev => {
+      const remaining = prev.filter(l => l.id !== id);
+      if (activeListId === id) {
+        setActiveListId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      return remaining;
+    });
   };
 
   const toggleItem = (itemId: string) => {
@@ -168,6 +177,9 @@ const ShoppingLists: React.FC<ShoppingListsProps> = ({ shoppingLists, setShoppin
               <div
                 key={list.id}
                 onClick={() => setActiveListId(list.id)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setActiveListId(list.id); }}
+                role="button"
+                tabIndex={0}
                 className={`group flex items-start justify-between p-4 rounded-2xl border cursor-pointer transition-all ${
                   activeListId === list.id
                     ? 'bg-indigo-50 border-indigo-200'

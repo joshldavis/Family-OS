@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PinboardNote, NoteColor, User } from '../types';
 import { Pin, PinOff, Plus, Trash2, X } from 'lucide-react';
 
@@ -23,11 +23,56 @@ const COLOR_SWATCH: Record<NoteColor, string> = {
   yellow: 'bg-amber-400', blue: 'bg-sky-400', green: 'bg-green-400', pink: 'bg-pink-400',
 };
 
+// ── NoteCard defined outside Pinboard to prevent remounts on every render ─────
+interface NoteCardProps {
+  note: PinboardNote;
+  author: User | undefined;
+  isDeleting: boolean;
+  onTogglePin: (id: string) => void;
+  onDelete: (id: string) => void;
+}
+
+const NoteCard: React.FC<NoteCardProps> = ({ note, author, isDeleting, onTogglePin, onDelete }) => {
+  const { bg, border, dot } = COLOR_CLASSES[note.color];
+  return (
+    <div className={`group relative rounded-2xl border-2 p-5 transition-all duration-300 ${bg} ${border} ${isDeleting ? 'scale-90 opacity-0' : 'scale-100 opacity-100'}`}>
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${dot}`} />
+        <div className="flex-1" />
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onTogglePin(note.id)} title={note.pinned ? 'Unpin' : 'Pin'} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-white/60 transition-colors">
+            {note.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+          </button>
+          <button onClick={() => onDelete(note.id)} className="text-slate-400 hover:text-red-500 p-1 rounded-lg hover:bg-white/60 transition-colors">
+            <Trash2 size={14} />
+          </button>
+        </div>
+        {note.pinned && <Pin size={14} className="text-slate-400 flex-shrink-0" />}
+      </div>
+      <p className="text-slate-800 text-sm leading-relaxed">{note.content}</p>
+      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-black/5">
+        {author?.avatar && <img src={author.avatar} className="w-5 h-5 rounded-full" alt={author.name} />}
+        <p className="text-[10px] text-slate-400 font-medium">{author?.name?.split(' ')[0]} · {note.createdAt}</p>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const Pinboard: React.FC<PinboardProps> = ({ notes, setNotes, users, currentUser }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newContent, setNewContent] = useState('');
   const [newColor, setNewColor] = useState<NoteColor>('yellow');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up any pending delete animation on unmount
+  useEffect(() => {
+    return () => {
+      if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
+    };
+  }, []);
 
   const getAuthor = (authorId: string) => users.find(u => u.id === authorId);
 
@@ -51,39 +96,16 @@ const Pinboard: React.FC<PinboardProps> = ({ notes, setNotes, users, currentUser
     setNotes(prev => prev.map(n => n.id === id ? { ...n, pinned: !n.pinned } : n));
 
   const deleteNote = (id: string) => {
+    if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
     setDeletingId(id);
-    setTimeout(() => { setNotes(prev => prev.filter(n => n.id !== id)); setDeletingId(null); }, 300);
+    deleteTimeoutRef.current = setTimeout(() => {
+      setNotes(prev => prev.filter(n => n.id !== id));
+      setDeletingId(null);
+    }, 300);
   };
 
   const pinned = notes.filter(n => n.pinned);
   const unpinned = notes.filter(n => !n.pinned);
-
-  const NoteCard = ({ note }: { note: PinboardNote }) => {
-    const { bg, border, dot } = COLOR_CLASSES[note.color];
-    const author = getAuthor(note.authorId);
-    return (
-      <div className={`group relative rounded-2xl border-2 p-5 transition-all duration-300 ${bg} ${border} ${deletingId === note.id ? 'scale-90 opacity-0' : 'scale-100 opacity-100'}`}>
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${dot}`} />
-          <div className="flex-1" />
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => togglePin(note.id)} title={note.pinned ? 'Unpin' : 'Pin'} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-white/60 transition-colors">
-              {note.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-            </button>
-            <button onClick={() => deleteNote(note.id)} className="text-slate-400 hover:text-red-500 p-1 rounded-lg hover:bg-white/60 transition-colors">
-              <Trash2 size={14} />
-            </button>
-          </div>
-          {note.pinned && <Pin size={14} className="text-slate-400 flex-shrink-0" />}
-        </div>
-        <p className="text-slate-800 text-sm leading-relaxed">{note.content}</p>
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-black/5">
-          {author?.avatar && <img src={author.avatar} className="w-5 h-5 rounded-full" alt={author.name} />}
-          <p className="text-[10px] text-slate-400 font-medium">{author?.name?.split(' ')[0]} · {note.createdAt}</p>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
@@ -110,10 +132,10 @@ const Pinboard: React.FC<PinboardProps> = ({ notes, setNotes, users, currentUser
             autoFocus
             value={newContent}
             onChange={e => setNewContent(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) addNote(); }}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addNote(); }}
             rows={3}
             className="w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none mb-4"
-            placeholder="What's on your mind? (⌘+Enter to save)"
+            placeholder="What's on your mind? (Ctrl/⌘+Enter to save)"
           />
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -142,7 +164,16 @@ const Pinboard: React.FC<PinboardProps> = ({ notes, setNotes, users, currentUser
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Pinned</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pinned.map(note => <NoteCard key={note.id} note={note} />)}
+            {pinned.map(note => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                author={getAuthor(note.authorId)}
+                isDeleting={deletingId === note.id}
+                onTogglePin={togglePin}
+                onDelete={deleteNote}
+              />
+            ))}
           </div>
         </section>
       )}
@@ -152,7 +183,16 @@ const Pinboard: React.FC<PinboardProps> = ({ notes, setNotes, users, currentUser
         <section>
           {pinned.length > 0 && <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">All Notes</h3>}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {unpinned.map(note => <NoteCard key={note.id} note={note} />)}
+            {unpinned.map(note => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                author={getAuthor(note.authorId)}
+                isDeleting={deletingId === note.id}
+                onTogglePin={togglePin}
+                onDelete={deleteNote}
+              />
+            ))}
           </div>
         </section>
       )}

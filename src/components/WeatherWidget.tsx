@@ -32,6 +32,9 @@ const WeatherWidget: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
     const apiKey = import.meta.env.VITE_OPENWEATHER_KEY;
 
     if (!apiKey) {
@@ -48,7 +51,7 @@ const WeatherWidget: React.FC = () => {
         low: 58,
       });
       setLoading(false);
-      return;
+      return () => { isMounted = false; controller.abort(); };
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -56,10 +59,12 @@ const WeatherWidget: React.FC = () => {
         try {
           const { latitude, longitude } = position.coords;
           const res = await fetch(
-            `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=imperial`
+            `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=imperial`,
+            { signal: controller.signal }
           );
           if (!res.ok) throw new Error('Weather API error');
           const data = await res.json();
+          if (!isMounted) return;
           setWeather({
             temp: Math.round(data.main.temp),
             feelsLike: Math.round(data.main.feels_like),
@@ -71,14 +76,17 @@ const WeatherWidget: React.FC = () => {
             high: Math.round(data.main.temp_max),
             low: Math.round(data.main.temp_min),
           });
-        } catch {
+        } catch (err: unknown) {
+          if (!isMounted) return;
+          if (err instanceof Error && err.name === 'AbortError') return;
           setError('Could not fetch weather');
         } finally {
-          setLoading(false);
+          if (isMounted) setLoading(false);
         }
       },
       () => {
-        // Geolocation denied — show fallback
+        // Geolocation denied or timed out — show fallback
+        if (!isMounted) return;
         setWeather({
           temp: 72,
           feelsLike: 70,
@@ -91,8 +99,14 @@ const WeatherWidget: React.FC = () => {
           low: 58,
         });
         setLoading(false);
-      }
+      },
+      { timeout: 10000 }
     );
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, []);
 
   if (loading) {

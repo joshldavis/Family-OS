@@ -301,7 +301,7 @@ Be warm, specific, and practical. Reference actual data points.\n\n${context}` }
                   </li>
                   <li className="flex items-start gap-3">
                     <Zap size={18} className="text-indigo-400 mt-1 flex-shrink-0" />
-                    <span>Budget utilization is at {Math.round((totalSpent / totalBudget) * 100)}% — {totalSpent / totalBudget > 0.85 ? 'watch your spending!' : 'healthy pacing.'}</span>
+                    <span>Budget utilization is at {totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0}% — {totalBudget > 0 && totalSpent / totalBudget > 0.85 ? 'watch your spending!' : 'healthy pacing.'}</span>
                   </li>
                 </ul>
               </div>

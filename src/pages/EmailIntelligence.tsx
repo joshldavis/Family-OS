@@ -38,7 +38,6 @@ interface EmailIntelligenceProps {
   classifiedEmails: ClassifiedEmail[];
   emailScanConfig: EmailScanConfig;
   lastScanResult: EmailScanResult | null;
-  isScanning: boolean;
   students: Student[];
   events: CalendarEvent[];
   assignments: Assignment[];
@@ -64,7 +63,6 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
   announcements,
   classifiedEmails,
   lastScanResult,
-  isScanning,
   students,
   events,
   assignments,
@@ -177,7 +175,7 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
-  const scanning = isScanning || localScanning;
+  const scanning = localScanning;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

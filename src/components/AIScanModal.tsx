@@ -33,7 +33,13 @@ const AIScanModal: React.FC<AIScanModalProps> = ({
     setError(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY || '' });
+      const apiKey = import.meta.env.VITE_API_KEY;
+      if (!apiKey) {
+        setError('Gemini API key is not configured. Add VITE_API_KEY to your .env file.');
+        setIsProcessing(false);
+        return;
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const today = new Date().toISOString().split('T')[0];
       
       let systemInstruction = `Today's date is ${today}. `;
@@ -100,7 +106,8 @@ const AIScanModal: React.FC<AIScanModalProps> = ({
         }
       });
 
-      const extracted = JSON.parse(result.text || "{}");
+      const fallback = context === 'finance' ? '{}' : '[]';
+      const extracted = JSON.parse(result.text || fallback);
       onDataExtracted(extracted);
       onClose();
     } catch (err) {
@@ -115,7 +122,19 @@ const AIScanModal: React.FC<AIScanModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset input so the same file can be re-uploaded after an error
+    e.target.value = '';
+
+    const MAX_SIZE_MB = 5;
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      setError(`File size exceeds ${MAX_SIZE_MB}MB limit.`);
+      return;
+    }
+
     const reader = new FileReader();
+    reader.onerror = () => {
+      setError('Failed to read the file. Please try again.');
+    };
     reader.onloadend = () => {
       const base64Data = (reader.result as string).split(',')[1];
       processWithAI({ data: base64Data, mimeType: file.type });

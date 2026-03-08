@@ -59,7 +59,7 @@ export function getDefaultEnabledModules(): string[] {
 export function areDependenciesMet(moduleId: string, enabledModules: string[]): boolean {
   const mod = getModule(moduleId);
   if (!mod) return false;
-  return mod.dependencies.every(dep => enabledModules.includes(dep));
+  return (mod.dependencies ?? []).every(dep => enabledModules.includes(dep));
 }
 
 /**
@@ -69,6 +69,6 @@ export function areDependenciesMet(moduleId: string, enabledModules: string[]): 
  */
 export function getDependents(moduleId: string, enabledModules: string[]): string[] {
   return MODULE_REGISTRY
-    .filter(m => enabledModules.includes(m.id) && m.dependencies.includes(moduleId))
+    .filter(m => enabledModules.includes(m.id) && (m.dependencies ?? []).includes(moduleId))
     .map(m => m.id);
 }

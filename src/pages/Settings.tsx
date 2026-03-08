@@ -43,6 +43,10 @@ const Settings: React.FC<SettingsProps> = ({
   const [copied, setCopied] = useState(false);
   const [newDomain, setNewDomain] = useState('');
   const [newSender, setNewSender] = useState('');
+  const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
+
+  const handleAvatarError = (userId: string) =>
+    setAvatarErrors(prev => ({ ...prev, [userId]: true }));
 
   const handleLinkGoogle = () => {
     setIsLinking(true);
@@ -53,9 +57,14 @@ const Settings: React.FC<SettingsProps> = ({
   };
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(family.inviteCode).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(family.inviteCode)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {
+        // Clipboard write failed (permissions or insecure context)
+      });
   };
 
   return (
@@ -314,15 +323,18 @@ const Settings: React.FC<SettingsProps> = ({
                   {familyUsers.map(u => (
                     <div key={u.id} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
-                        <img
-                          src={u.avatar}
-                          className="w-8 h-8 rounded-full bg-slate-100 object-cover"
-                          alt={u.name}
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '';
-                            (e.target as HTMLImageElement).className = 'w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600';
-                          }}
-                        />
+                        {avatarErrors[u.id] ? (
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
+                            {u.name.charAt(0).toUpperCase()}
+                          </div>
+                        ) : (
+                          <img
+                            src={u.avatar}
+                            className="w-8 h-8 rounded-full bg-slate-100 object-cover flex-shrink-0"
+                            alt={u.name}
+                            onError={() => handleAvatarError(u.id)}
+                          />
+                        )}
                         <div>
                           <span className="font-medium text-slate-800">{u.name}</span>
                           <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${

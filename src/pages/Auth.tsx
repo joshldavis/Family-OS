@@ -12,10 +12,13 @@ interface AuthProps {
 const Auth: React.FC<AuthProps> = ({ onLogin, users, familyName }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [isJoin, setIsJoin] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Demo auth: find by email, fall back to first user
+    // TODO: replace with real auth (Supabase) in Phase 3
     const user = users.find(u => u.email === email) || users[0];
     onLogin(user);
   };
@@ -49,10 +52,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users, familyName }) => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Email Address</label>
+              <label htmlFor="auth-email" className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Email Address</label>
               <div className="relative">
                 <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input
+                  id="auth-email"
                   type="email"
                   className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
                   placeholder="name@example.com"
@@ -65,13 +69,16 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users, familyName }) => {
 
             {isJoin && (
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Invite Code</label>
+                <label htmlFor="auth-invite" className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Invite Code</label>
                 <div className="relative">
                   <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                   <input
+                    id="auth-invite"
                     type="text"
                     className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
                     placeholder="e.g. SMITH2025"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
                     required
                   />
                 </div>
@@ -79,10 +86,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users, familyName }) => {
             )}
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Password</label>
+              <label htmlFor="auth-password" className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input
+                  id="auth-password"
                   type="password"
                   className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
                   placeholder="••••••••"
