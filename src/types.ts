@@ -457,6 +457,43 @@ export interface HealthLogEntry {
   waterGlasses: number;
 }
 
+// ─── Goal Templates Types ─────────────────────────────────────────────────────
+
+export type GoalTemplateCategory = 'Health' | 'Learning' | 'Finance' | 'Fun' | 'Custom';
+
+export interface GoalTemplate {
+  id: string;
+  title: string;
+  description: string;
+  emoji: string;
+  category: GoalTemplateCategory;
+  targetValue: number;
+  unit: string;
+  allowancePoints?: number; // points awarded on completion
+}
+
+export interface GoalContribution {
+  userId: string;
+  amount: number;
+  loggedAt: string; // ISO timestamp
+}
+
+export interface ActiveGoal {
+  id: string;
+  familyId: string;
+  templateId: string | null;  // null = custom
+  title: string;
+  description: string;
+  emoji: string;
+  category: GoalTemplateCategory;
+  targetValue: number;
+  unit: string;
+  allowancePoints?: number;
+  contributions: GoalContribution[];
+  createdAt: string;
+  completedAt?: string;
+}
+
 // ─── Document Vault Types ─────────────────────────────────────────────────────
 
 export type DocumentCategory =

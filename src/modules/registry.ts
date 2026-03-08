@@ -16,6 +16,7 @@ import insights         from './definitions/insights';
 import emailIntelligence from './definitions/emailIntelligence';
 import aiScan           from './definitions/aiScan';
 import wellness         from './definitions/wellness';
+import goals           from './definitions/goals';
 
 /**
  * Canonical ordered list of all modules.
@@ -37,6 +38,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   insights,
   aiScan,
   wellness,
+  goals,
   settings,
 ];
 
