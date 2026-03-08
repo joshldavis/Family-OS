@@ -6,12 +6,15 @@ import {
   Clock,
   Plus,
   ChevronRight,
+  ChevronLeft,
   Calendar as CalendarIcon,
   GraduationCap,
   RefreshCw,
   CheckCircle2,
   Globe,
-  X
+  X,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { useFamily } from '../FamilyContext';
 
@@ -27,26 +30,248 @@ interface MergedItem {
   provider?: 'internal' | 'google';
 }
 
+// ── Month Grid ────────────────────────────────────────────────────────────────
+
+const DOT_COLORS: Record<string, string> = {
+  event_internal: 'bg-indigo-500',
+  event_google:   'bg-blue-500',
+  assignment:     'bg-amber-400',
+};
+
+interface MonthGridProps {
+  viewMonth: Date;
+  onPrev: () => void;
+  onNext: () => void;
+  groupedItems: Record<string, MergedItem[]>;
+  selectedDay: string | null;
+  onSelectDay: (d: string | null) => void;
+}
+
+const MonthGrid: React.FC<MonthGridProps> = ({
+  viewMonth, onPrev, onNext, groupedItems, selectedDay, onSelectDay,
+}) => {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const year  = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+
+  const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0=Sun
+  const daysInMonth     = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  // Build a flat array of 42 cell objects (6 rows × 7 cols)
+  const cells = useMemo(() => {
+    const result: { dateStr: string; inMonth: boolean }[] = [];
+    // Leading days from prev month
+    for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+      const d = new Date(year, month - 1, daysInPrevMonth - i);
+      result.push({ dateStr: d.toISOString().split('T')[0], inMonth: false });
+    }
+    // Current month
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      result.push({ dateStr: date.toISOString().split('T')[0], inMonth: true });
+    }
+    // Trailing days from next month
+    const remaining = 42 - result.length;
+    for (let d = 1; d <= remaining; d++) {
+      const date = new Date(year, month + 1, d);
+      result.push({ dateStr: date.toISOString().split('T')[0], inMonth: false });
+    }
+    return result;
+  }, [year, month, firstDayOfMonth, daysInMonth, daysInPrevMonth]);
+
+  const monthLabel = viewMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="bg-white border rounded-2xl notion-shadow overflow-hidden">
+      {/* Month navigation */}
+      <div className="flex items-center justify-between px-6 py-4 border-b bg-slate-50/50">
+        <button onClick={onPrev} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+          <ChevronLeft size={18} className="text-slate-500" />
+        </button>
+        <h2 className="font-bold text-slate-900 text-lg">{monthLabel}</h2>
+        <button onClick={onNext} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+          <ChevronRight size={18} className="text-slate-500" />
+        </button>
+      </div>
+
+      {/* Day-of-week headers */}
+      <div className="grid grid-cols-7 border-b">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+          <div key={d} className="py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar cells */}
+      <div className="grid grid-cols-7 divide-x divide-y border-r border-b">
+        {cells.map(({ dateStr, inMonth }) => {
+          const items   = groupedItems[dateStr] ?? [];
+          const isToday = dateStr === todayStr;
+          const isSel   = dateStr === selectedDay;
+          const dayNum  = parseInt(dateStr.split('-')[2], 10);
+          const visible = items.slice(0, 3);
+          const overflow = items.length - visible.length;
+
+          return (
+            <div
+              key={dateStr}
+              onClick={() => onSelectDay(isSel ? null : dateStr)}
+              className={`min-h-[80px] p-1.5 cursor-pointer transition-colors ${
+                !inMonth       ? 'bg-slate-50/60'        : 'bg-white hover:bg-indigo-50/30'
+              } ${isSel ? 'ring-2 ring-inset ring-indigo-400' : ''}`}
+            >
+              {/* Day number */}
+              <div className="flex justify-end mb-1">
+                <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${
+                  isToday
+                    ? 'bg-indigo-600 text-white'
+                    : !inMonth
+                      ? 'text-slate-300'
+                      : 'text-slate-700'
+                }`}>
+                  {dayNum}
+                </span>
+              </div>
+              {/* Event chips */}
+              <div className="space-y-0.5">
+                {visible.map(item => (
+                  <div
+                    key={item.id}
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded truncate text-white ${
+                      item.type === 'assignment'
+                        ? 'bg-amber-400'
+                        : item.provider === 'google'
+                          ? 'bg-blue-500'
+                          : 'bg-indigo-500'
+                    }`}
+                  >
+                    {item.title}
+                  </div>
+                ))}
+                {overflow > 0 && (
+                  <div className="text-[10px] text-slate-400 font-semibold pl-1">
+                    +{overflow} more
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 px-6 py-3 border-t bg-slate-50/50">
+        {[
+          { color: 'bg-indigo-500', label: 'Event' },
+          { color: 'bg-blue-500',   label: 'Google' },
+          { color: 'bg-amber-400',  label: 'Assignment' },
+        ].map(({ color, label }) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <div className={`w-2.5 h-2.5 rounded-sm ${color}`} />
+            <span className="text-xs text-slate-500 font-medium">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Selected Day Detail Panel ─────────────────────────────────────────────────
+
+interface DayDetailProps {
+  dateStr: string;
+  items: MergedItem[];
+  onClose: () => void;
+}
+
+const DayDetail: React.FC<DayDetailProps> = ({ dateStr, items, onClose }) => {
+  const label = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric',
+  });
+  return (
+    <div className="bg-white border rounded-2xl notion-shadow overflow-hidden animate-in slide-in-from-top-2 duration-200">
+      <div className="flex items-center justify-between px-5 py-4 border-b bg-indigo-50/40">
+        <h3 className="font-bold text-slate-900">{label}</h3>
+        <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-200 transition-colors">
+          <X size={16} className="text-slate-500" />
+        </button>
+      </div>
+      <div className="p-4 space-y-3">
+        {items.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">Nothing scheduled</p>
+        ) : items.map(item => (
+          <div
+            key={item.id}
+            className={`flex gap-3 p-3 rounded-xl border ${
+              item.type === 'assignment'
+                ? 'border-l-4 border-l-amber-400 bg-amber-50/30'
+                : item.provider === 'google'
+                  ? 'border-l-4 border-l-blue-500 bg-blue-50/30'
+                  : 'border-l-4 border-l-indigo-400 bg-indigo-50/20'
+            }`}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-slate-900 text-sm truncate">{item.title}</p>
+              <div className="flex flex-wrap gap-3 mt-1">
+                {item.type === 'event' && (
+                  <span className="text-xs text-slate-500">
+                    {new Date(item.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                    {item.end && ` – ${new Date(item.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
+                  </span>
+                )}
+                {item.location && (
+                  <span className="flex items-center gap-1 text-xs text-slate-500">
+                    <MapPin size={11} /> {item.location}
+                  </span>
+                )}
+                {item.category && (
+                  <span className="text-xs text-indigo-600 font-semibold">{item.category}</span>
+                )}
+              </div>
+            </div>
+            {item.type === 'assignment' && (
+              <GraduationCap size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+            )}
+            {item.provider === 'google' && item.type === 'event' && (
+              <Globe size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
+type CalendarView = 'month' | 'agenda';
+
 const Calendar: React.FC = () => {
   const { state, dispatch } = useFamily();
   const events = state.events;
   const assignments = state.assignments;
   const isGoogleLinked = state.isGoogleLinked;
 
+  const [view, setView] = useState<CalendarView>('month');
+  const [viewMonth, setViewMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [eventFormError, setEventFormError] = useState<string | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Clean up pending sync timeout on unmount
   useEffect(() => {
     return () => {
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     };
   }, []);
 
-  // Merge standard events with assignments for a unified view
   const mergedItems = useMemo(() => {
     const eventItems: MergedItem[] = events.map(e => ({
       id: e.id,
@@ -62,7 +287,7 @@ const Calendar: React.FC = () => {
       id: a.id,
       type: 'assignment',
       title: a.title,
-      start: `${a.dueDate}T23:59`, // Default to end of day for sorting
+      start: `${a.dueDate}T23:59`,
       category: a.subject,
       isDone: a.status === Status.DONE,
       provider: 'internal'
@@ -71,7 +296,6 @@ const Calendar: React.FC = () => {
     return [...eventItems, ...assignmentItems].sort((a, b) => a.start.localeCompare(b.start));
   }, [events, assignments]);
 
-  // Group by date
   const groupedItems = useMemo(() => {
     return mergedItems.reduce((acc, item) => {
       const date = item.start.split('T')[0];
@@ -86,8 +310,6 @@ const Calendar: React.FC = () => {
   const handleSync = () => {
     if (!isGoogleLinked) return;
     setIsSyncing(true);
-
-    // Simulate API call to Google Calendar — replace with real Google Calendar API in Phase 3
     syncTimeoutRef.current = setTimeout(() => {
       const now = new Date().toISOString();
       const googleEvent: CalendarEvent = {
@@ -100,12 +322,8 @@ const Calendar: React.FC = () => {
         provider: 'google',
         createdAt: now,
       };
-
-      // Note: events snapshot is used here; for multi-user real-time use cases
-      // replace with Phase 3 Supabase real-time approach
       const filtered = events.filter(e => e.provider !== 'google');
       dispatch({ type: 'HYDRATE', payload: { events: [...filtered, googleEvent] } });
-
       setIsSyncing(false);
       setSyncComplete(true);
       syncTimeoutRef.current = setTimeout(() => setSyncComplete(false), 3000);
@@ -121,7 +339,6 @@ const Calendar: React.FC = () => {
     const syncToGoogle = formData.get('syncToGoogle') === 'on';
     const now = new Date().toISOString();
 
-    // Validate end time is after start time
     if (endTime && startTime && endTime <= startTime) {
       setEventFormError('End time must be after start time.');
       return;
@@ -150,7 +367,27 @@ const Calendar: React.FC = () => {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Family Calendar</h1>
           <p className="text-slate-500 mt-1">One schedule to rule them all. Events and assignments combined.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
+            <button
+              onClick={() => setView('month')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                view === 'month' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <LayoutGrid size={14} /> Month
+            </button>
+            <button
+              onClick={() => setView('agenda')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                view === 'agenda' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <List size={14} /> Agenda
+            </button>
+          </div>
+
           {isGoogleLinked && (
             <button
               onClick={handleSync}
@@ -181,108 +418,132 @@ const Calendar: React.FC = () => {
         </div>
       </header>
 
-      <div className="max-w-3xl space-y-12">
-        {dates.length > 0 ? dates.map(date => (
-          <div key={date} className="relative pl-8 border-l-2 border-slate-100 last:border-l-0 pb-8">
-            <div className="absolute -left-[9px] top-0 w-4 h-4 bg-indigo-600 rounded-full ring-4 ring-white"></div>
-            <div className="mb-6">
-              <h3 className="text-lg font-bold text-slate-900">
-                {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </h3>
-            </div>
-            <div className="space-y-4">
-              {groupedItems[date].map(item => (
-                <div
-                  key={`${item.type}-${item.id}`}
-                  className={`bg-white border p-5 rounded-2xl notion-shadow flex gap-6 transition-all group ${
-                    item.type === 'assignment'
-                      ? 'border-l-4 border-l-amber-400 hover:border-amber-200'
-                      : item.provider === 'google'
-                        ? 'border-l-4 border-l-blue-500 hover:border-blue-200'
-                        : 'hover:border-indigo-200'
-                  }`}
-                >
-                  <div className="w-20 pt-1">
-                    {item.type === 'event' ? (
-                      <>
-                        <p className={`text-sm font-bold ${item.provider === 'google' ? 'text-blue-600' : 'text-indigo-600'}`}>
-                          {new Date(item.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                        </p>
-                        <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Start</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm font-bold text-amber-600 uppercase">Due</p>
-                        <GraduationCap size={20} className="text-amber-400 mt-1" />
-                      </>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className={`font-bold text-slate-900 text-lg ${item.isDone ? 'text-slate-400 line-through' : ''}`}>
-                        {item.title}
-                      </h4>
-                      <div className="flex gap-1">
-                        {item.type === 'assignment' && (
-                          <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Assignment</span>
+      {/* Month view */}
+      {view === 'month' && (
+        <div className="space-y-4">
+          <MonthGrid
+            viewMonth={viewMonth}
+            onPrev={() => setViewMonth(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+            onNext={() => setViewMonth(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+            groupedItems={groupedItems}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+          />
+          {selectedDay && (
+            <DayDetail
+              dateStr={selectedDay}
+              items={groupedItems[selectedDay] ?? []}
+              onClose={() => setSelectedDay(null)}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Agenda view */}
+      {view === 'agenda' && (
+        <div className="max-w-3xl space-y-12">
+          {dates.length > 0 ? dates.map(date => (
+            <div key={date} className="relative pl-8 border-l-2 border-slate-100 last:border-l-0 pb-8">
+              <div className="absolute -left-[9px] top-0 w-4 h-4 bg-indigo-600 rounded-full ring-4 ring-white"></div>
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-slate-900">
+                  {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                </h3>
+              </div>
+              <div className="space-y-4">
+                {groupedItems[date].map(item => (
+                  <div
+                    key={`${item.type}-${item.id}`}
+                    className={`bg-white border p-5 rounded-2xl notion-shadow flex gap-6 transition-all group ${
+                      item.type === 'assignment'
+                        ? 'border-l-4 border-l-amber-400 hover:border-amber-200'
+                        : item.provider === 'google'
+                          ? 'border-l-4 border-l-blue-500 hover:border-blue-200'
+                          : 'hover:border-indigo-200'
+                    }`}
+                  >
+                    <div className="w-20 pt-1">
+                      {item.type === 'event' ? (
+                        <>
+                          <p className={`text-sm font-bold ${item.provider === 'google' ? 'text-blue-600' : 'text-indigo-600'}`}>
+                            {new Date(item.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                          </p>
+                          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Start</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-bold text-amber-600 uppercase">Due</p>
+                          <GraduationCap size={20} className="text-amber-400 mt-1" />
+                        </>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h4 className={`font-bold text-slate-900 text-lg ${item.isDone ? 'text-slate-400 line-through' : ''}`}>
+                          {item.title}
+                        </h4>
+                        <div className="flex gap-1">
+                          {item.type === 'assignment' && (
+                            <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Assignment</span>
+                          )}
+                          {item.provider === 'google' && (
+                            <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1">
+                              <Globe size={10} /> Google
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-4">
+                        {item.type === 'event' && item.end && (
+                          <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                            <Clock size={16} className="text-slate-400" />
+                            <span>Duration: {((new Date(item.end).getTime() - new Date(item.start).getTime()) / 60000)} mins</span>
+                          </div>
                         )}
-                        {item.provider === 'google' && (
-                          <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1">
-                            <Globe size={10} /> Google
-                          </span>
+                        {item.location && (
+                          <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                            <MapPin size={16} className="text-slate-400" />
+                            <span>{item.location}</span>
+                          </div>
+                        )}
+                        {item.category && (
+                          <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                            <span className="font-medium text-slate-400">Subject:</span>
+                            <span className="text-indigo-600 font-semibold">{item.category}</span>
+                          </div>
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-4">
-                      {item.type === 'event' && item.end && (
-                        <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                          <Clock size={16} className="text-slate-400" />
-                          <span>Duration: {((new Date(item.end).getTime() - new Date(item.start).getTime()) / 60000)} mins</span>
-                        </div>
-                      )}
-                      {item.location && (
-                        <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                          <MapPin size={16} className="text-slate-400" />
-                          <span>{item.location}</span>
-                        </div>
-                      )}
-                      {item.category && (
-                        <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                          <span className="font-medium text-slate-400">Subject:</span>
-                          <span className="text-indigo-600 font-semibold">{item.category}</span>
-                        </div>
-                      )}
+                    <div className="flex items-center">
+                      <ChevronRight className={`text-slate-300 group-hover:translate-x-1 transition-all ${
+                        item.type === 'assignment'
+                          ? 'group-hover:text-amber-400'
+                          : item.provider === 'google'
+                            ? 'group-hover:text-blue-500'
+                            : 'group-hover:text-indigo-400'
+                      }`} size={24} />
                     </div>
                   </div>
-                  <div className="flex items-center">
-                    <ChevronRight className={`text-slate-300 group-hover:translate-x-1 transition-all ${
-                      item.type === 'assignment'
-                        ? 'group-hover:text-amber-400'
-                        : item.provider === 'google'
-                          ? 'group-hover:text-blue-500'
-                          : 'group-hover:text-indigo-400'
-                    }`} size={24} />
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )) : (
-          <div className="bg-white border-2 border-dashed rounded-3xl p-20 text-center">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CalendarIcon size={32} className="text-slate-300" />
+          )) : (
+            <div className="bg-white border-2 border-dashed rounded-3xl p-20 text-center">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CalendarIcon size={32} className="text-slate-300" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">Empty Schedule</h3>
+              <p className="text-slate-500 mt-1 max-w-xs mx-auto">No events or deadlines planned yet.</p>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="mt-6 text-indigo-600 font-bold hover:underline"
+              >
+                Add an Event
+              </button>
             </div>
-            <h3 className="text-lg font-bold text-slate-900">Empty Schedule</h3>
-            <p className="text-slate-500 mt-1 max-w-xs mx-auto">No events or deadlines planned yet. Start by adding items to your family workspace.</p>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="mt-6 text-indigo-600 font-bold hover:underline"
-            >
-              Add an Event
-            </button>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* New Event Modal */}
       {isModalOpen && (
@@ -304,15 +565,13 @@ const Calendar: React.FC = () => {
                   placeholder="e.g. Soccer Match"
                 />
               </div>
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Location</label>
-                  <input
-                    name="location"
-                    className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
-                    placeholder="e.g. West Park Field"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Location</label>
+                <input
+                  name="location"
+                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                  placeholder="e.g. West Park Field"
+                />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Date</label>
