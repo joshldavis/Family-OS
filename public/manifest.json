@@ -1,0 +1,42 @@
+{
+  "name": "Family OS",
+  "short_name": "Family OS",
+  "description": "Bring calm to the chaos. Manage your family's schedule, schoolwork, chores, and finances in one place.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/#/",
+      "description": "View today's family overview"
+    },
+    {
+      "name": "Schoolwork",
+      "url": "/#/schoolwork",
+      "description": "Manage assignments"
+    },
+    {
+      "name": "Chores",
+      "url": "/#/chores",
+      "description": "Check chore assignments"
+    }
+  ]
+}
