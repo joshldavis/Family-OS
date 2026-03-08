@@ -21,6 +21,7 @@ import {
   ListTodo,
   Target,
   Activity,
+  Heart,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -42,4 +43,5 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   ListTodo,
   Target,
   Activity,
+  Heart,
 };

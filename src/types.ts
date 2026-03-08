@@ -419,6 +419,44 @@ export interface ClassifiedEmail {
   };
 }
 
+// ─── Wellness Types ───────────────────────────────────────────────────────────
+
+export interface Habit {
+  id: string;
+  familyId: string;
+  name: string;
+  emoji: string;
+  color: string;       // tailwind bg color class e.g. 'bg-green-100'
+  createdAt: string;
+}
+
+export interface HabitCheckIn {
+  habitId: string;
+  userId: string;
+  date: string;        // YYYY-MM-DD
+}
+
+export interface FamilyGoal {
+  id: string;
+  familyId: string;
+  title: string;
+  description: string;
+  targetValue: number;
+  currentProgress: number;
+  unit: string;        // e.g. 'miles', 'books', '%'
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface HealthLogEntry {
+  id: string;
+  userId: string;
+  date: string;        // YYYY-MM-DD
+  exerciseMinutes: number;
+  sleepHours: number;
+  waterGlasses: number;
+}
+
 // ─── Document Vault Types ─────────────────────────────────────────────────────
 
 export type DocumentCategory =

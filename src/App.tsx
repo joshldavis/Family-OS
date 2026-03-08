@@ -67,6 +67,7 @@ import Allowance         from './pages/Allowance';
 import Pinboard          from './pages/Pinboard';
 import Documents         from './pages/Documents';
 import EmailIntelligence from './pages/EmailIntelligence';
+import Wellness          from './pages/Wellness';
 
 // Components
 import AIChatPanel from './components/AIChatPanel';
@@ -86,6 +87,7 @@ export const MODULE_COMPONENTS: Record<string, ComponentType<any>> = {
   'pinboard':            Pinboard,
   'documents':           Documents,
   'email-intelligence':  EmailIntelligence,
+  'wellness':            Wellness,
   'insights':            Insights,
   'settings':            Settings,
 };
@@ -193,6 +195,7 @@ const AppInner: React.FC = () => {
       'family_os_notes', 'family_os_documents', 'family_os_action_items',
       'family_os_behavior_updates', 'family_os_announcements',
       'family_os_classified_emails', 'family_os_email_config', 'family_os_last_scan',
+      'family_os_habits', 'family_os_habit_checkins', 'family_os_family_goals', 'family_os_health_log',
       'family_os_module_preferences', 'family_os_v2',
     ].forEach(k => localStorage.removeItem(k));
     window.location.reload();
@@ -288,6 +291,8 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
           onScanComplete: handleScanComplete,
           onUpdateConfig: handleUpdateEmailConfig,
         };
+      case 'wellness':
+        return { users: activeFamilyUsers, currentUser: state.currentUser };
       case 'settings':
         return {
           family: activeFamily,
