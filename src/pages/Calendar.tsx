@@ -19,8 +19,11 @@ import {
   MessageSquare,
   Loader2,
   Sparkles,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { useFamily } from '../FamilyContext';
+import { useSpeechInput } from '../hooks/useSpeechInput';
 
 interface MergedItem {
   id: string;
@@ -268,6 +271,16 @@ const Calendar: React.FC = () => {
   const [syncComplete, setSyncComplete] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [eventFormError, setEventFormError] = useState<string | null>(null);
+  const [eventTitleValue, setEventTitleValue] = useState('');
+  const {
+    isListening: eventMicListening,
+    isSupported: speechSupported,
+    startListening: startEventMic,
+    stopListening: stopEventMic,
+  } = useSpeechInput({
+    onTranscript: (t) => setEventTitleValue(t),
+    onFinalTranscript: (t) => setEventTitleValue(t),
+  });
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Chat parser ────────────────────────────────────────────────────────
@@ -433,7 +446,7 @@ Only return the JSON array. No explanation.`;
     const newEvent: CalendarEvent = {
       id: `e-${Date.now()}`,
       familyId: 'fam-1',
-      title: formData.get('title') as string,
+      title: eventTitleValue || formData.get('title') as string,
       start: `${date}T${startTime}`,
       end: `${date}T${endTime}`,
       location: formData.get('location') as string,
@@ -442,6 +455,7 @@ Only return the JSON array. No explanation.`;
     };
 
     dispatch({ type: 'ADD_EVENT', payload: newEvent });
+    setEventTitleValue('');
     setIsModalOpen(false);
   };
 
@@ -501,7 +515,7 @@ Only return the JSON array. No explanation.`;
             Paste Chat
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => { setEventTitleValue(''); setIsModalOpen(true); }}
             className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm text-sm"
           >
             <Plus size={18} />
@@ -627,7 +641,7 @@ Only return the JSON array. No explanation.`;
               <h3 className="text-lg font-bold text-slate-900">Empty Schedule</h3>
               <p className="text-slate-500 mt-1 max-w-xs mx-auto">No events or deadlines planned yet.</p>
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => { setEventTitleValue(''); setIsModalOpen(true); }}
                 className="mt-6 text-indigo-600 font-bold hover:underline"
               >
                 Add an Event
@@ -643,19 +657,33 @@ Only return the JSON array. No explanation.`;
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b flex justify-between items-center bg-indigo-50/30">
               <h2 className="text-xl font-bold text-slate-900">New Family Event</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+              <button onClick={() => { setEventTitleValue(''); setIsModalOpen(false); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                 <X size={20} className="text-slate-500" />
               </button>
             </div>
             <form onSubmit={handleCreateEvent} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Event Title</label>
-                <input
-                  name="title"
-                  required
-                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
-                  placeholder="e.g. Soccer Match"
-                />
+                <div className="flex gap-2">
+                  <input
+                    name="title"
+                    value={eventTitleValue}
+                    onChange={e => setEventTitleValue(e.target.value)}
+                    required
+                    className="flex-1 px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                    placeholder={eventMicListening ? 'Listening…' : 'e.g. Soccer Match'}
+                  />
+                  {speechSupported && (
+                    <button
+                      type="button"
+                      onClick={eventMicListening ? stopEventMic : startEventMic}
+                      title={eventMicListening ? 'Stop listening' : 'Dictate title'}
+                      className={`px-3 rounded-xl border transition-colors ${eventMicListening ? 'bg-red-500 text-white border-red-500 animate-pulse' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
+                    >
+                      {eventMicListening ? <MicOff size={16} /> : <Mic size={16} />}
+                    </button>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Location</label>

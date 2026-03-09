@@ -143,9 +143,17 @@ const ModuleSettings: React.FC = () => {
 
       {/* Confirmation dialog for disabling a module with dependents */}
       {confirmDisable && (
-        <div className="fixed inset-0 z-[120] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4 animate-in zoom-in-95 duration-200">
-            <h3 className="font-bold text-slate-900 text-lg">Disable {confirmDisable.name}?</h3>
+        <div
+          className="fixed inset-0 z-[120] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+          onKeyDown={e => e.key === 'Escape' && setConfirmDisable(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="disable-module-heading"
+            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4 animate-in zoom-in-95 duration-200"
+          >
+            <h3 id="disable-module-heading" className="font-bold text-slate-900 text-lg">Disable {confirmDisable.name}?</h3>
             <p className="text-sm text-slate-600">
               Other modules depend on <strong>{confirmDisable.name}</strong>. Disabling it will also
               disable:{' '}
@@ -154,6 +162,7 @@ const ModuleSettings: React.FC = () => {
             <p className="text-xs text-slate-400">Your data is kept — you can re-enable at any time.</p>
             <div className="flex gap-3 pt-2">
               <button
+                autoFocus
                 onClick={() => setConfirmDisable(null)}
                 className="flex-1 border border-slate-200 text-slate-700 font-semibold py-2 rounded-xl hover:bg-slate-50 text-sm transition-colors"
               >

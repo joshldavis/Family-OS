@@ -77,7 +77,7 @@ const EmailScanModal: React.FC<EmailScanModalProps> = ({ isOpen, onClose, onScan
               <p className="text-xs text-slate-500">Paste any school or ClassDojo email</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+          <button onClick={onClose} aria-label="Close" className="p-2 hover:bg-slate-200 rounded-full transition-colors">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -96,8 +96,9 @@ const EmailScanModal: React.FC<EmailScanModalProps> = ({ isOpen, onClose, onScan
             {/* Optional fields */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Subject (optional)</label>
+                <label htmlFor="esm-subject" className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Subject (optional)</label>
                 <input
+                  id="esm-subject"
                   type="text"
                   value={subject}
                   onChange={e => setSubject(e.target.value)}
@@ -106,8 +107,9 @@ const EmailScanModal: React.FC<EmailScanModalProps> = ({ isOpen, onClose, onScan
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">From (optional)</label>
+                <label htmlFor="esm-from" className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">From (optional)</label>
                 <input
+                  id="esm-from"
                   type="text"
                   value={from}
                   onChange={e => setFrom(e.target.value)}
@@ -119,8 +121,9 @@ const EmailScanModal: React.FC<EmailScanModalProps> = ({ isOpen, onClose, onScan
 
             {/* Email body */}
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Email Body</label>
+              <label htmlFor="esm-body" className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Email Body</label>
               <textarea
+                id="esm-body"
                 ref={textareaRef}
                 className="w-full h-40 p-3 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all resize-none text-sm"
                 placeholder="Paste the email text here — ClassDojo notifications, teacher emails, school newsletters, permission slip reminders…"
