@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { FamilyDocument, DocumentCategory } from '../types';
 import { FolderOpen, Plus, X, AlertTriangle, CheckCircle2, Trash2, Calendar, Search } from 'lucide-react';
 
@@ -38,6 +38,12 @@ const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments }) => {
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => { if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current); };
+  }, []);
+
   const [form, setForm] = useState({ name: '', category: 'Other' as DocumentCategory, expiryDate: '', notes: '', fileUrl: '' });
 
   const filtered = useMemo(() => documents.filter(doc => {
@@ -64,7 +70,10 @@ const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments }) => {
 
   const deleteDoc = (id: string) => {
     setDeletingId(id);
-    setTimeout(() => { setDocuments(prev => prev.filter(d => d.id !== id)); setDeletingId(null); }, 300);
+    deleteTimeoutRef.current = setTimeout(() => {
+      setDocuments(prev => prev.filter(d => d.id !== id));
+      setDeletingId(null);
+    }, 300);
   };
 
   const expiringCount = documents.filter(d => { const days = daysUntilExpiry(d.expiryDate); return days !== null && days <= 60; }).length;

@@ -64,14 +64,12 @@ const Pinboard: React.FC<PinboardProps> = ({ notes, setNotes, users, currentUser
   const [isAdding, setIsAdding] = useState(false);
   const [newContent, setNewContent] = useState('');
   const [newColor, setNewColor] = useState<NoteColor>('yellow');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const deleteTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  // Clean up any pending delete animation on unmount
+  // Clean up all pending delete timeouts on unmount
   useEffect(() => {
-    return () => {
-      if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
-    };
+    return () => { deleteTimeoutsRef.current.forEach(clearTimeout); };
   }, []);
 
   const getAuthor = (authorId: string) => users.find(u => u.id === authorId);
@@ -96,12 +94,17 @@ const Pinboard: React.FC<PinboardProps> = ({ notes, setNotes, users, currentUser
     setNotes(prev => prev.map(n => n.id === id ? { ...n, pinned: !n.pinned } : n));
 
   const deleteNote = (id: string) => {
-    if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
-    setDeletingId(id);
-    deleteTimeoutRef.current = setTimeout(() => {
+    // Cancel any existing timeout for this note (idempotent)
+    const existing = deleteTimeoutsRef.current.get(id);
+    if (existing) clearTimeout(existing);
+
+    setDeletingIds(prev => new Set(prev).add(id));
+    const timeout = setTimeout(() => {
       setNotes(prev => prev.filter(n => n.id !== id));
-      setDeletingId(null);
+      setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      deleteTimeoutsRef.current.delete(id);
     }, 300);
+    deleteTimeoutsRef.current.set(id, timeout);
   };
 
   const pinned = notes.filter(n => n.pinned);
@@ -169,7 +172,7 @@ const Pinboard: React.FC<PinboardProps> = ({ notes, setNotes, users, currentUser
                 key={note.id}
                 note={note}
                 author={getAuthor(note.authorId)}
-                isDeleting={deletingId === note.id}
+                isDeleting={deletingIds.has(note.id)}
                 onTogglePin={togglePin}
                 onDelete={deleteNote}
               />
@@ -188,7 +191,7 @@ const Pinboard: React.FC<PinboardProps> = ({ notes, setNotes, users, currentUser
                 key={note.id}
                 note={note}
                 author={getAuthor(note.authorId)}
-                isDeleting={deletingId === note.id}
+                isDeleting={deletingIds.has(note.id)}
                 onTogglePin={togglePin}
                 onDelete={deleteNote}
               />

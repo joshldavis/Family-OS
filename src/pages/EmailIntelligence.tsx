@@ -74,7 +74,7 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [localScanning, setLocalScanning] = useState(false);
-  const [flashMessage, setFlashMessage] = useState<string | null>(null);
+  const [flashMessage, setFlashMessage] = useState<{ text: string; type: 'success' | 'warning' } | null>(null);
   const lastScanTimestamp = useRef<number>(0);
 
   const pendingActions = actionItems.filter(a => a.status === 'pending')
@@ -100,7 +100,7 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
   const handleScan = useCallback(async (text: string, subject: string, from: string) => {
     const now = Date.now();
     if (now - lastScanTimestamp.current < SCAN_DEBOUNCE_MS) {
-      setFlashMessage('Please wait a moment before scanning again.');
+      setFlashMessage({ text: 'Please wait a moment before scanning again.', type: 'warning' });
       setTimeout(() => setFlashMessage(null), 3000);
       return;
     }
@@ -123,7 +123,7 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
       const cleaned = parseEmailSource(text);
       const classified = await classifySingleEmail(cleaned, subject, from, context, apiKey);
 
-      const familyId = events[0]?.familyId || 'fam-1';
+      const familyId = events[0]?.familyId ?? 'fam-1';
       const routerStudents = students.map(s => ({ id: s.id, name: s.name }));
       const routingResult = routeClassifiedEmails(classified, {
         events,
@@ -157,7 +157,7 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
       const msg = itemsCreated > 0
         ? `✓ Found ${itemsCreated} item${itemsCreated !== 1 ? 's' : ''} to add`
         : '✓ Email scanned — nothing new to add';
-      setFlashMessage(msg);
+      setFlashMessage({ text: msg, type: 'success' });
       setTimeout(() => setFlashMessage(null), 4000);
     } finally {
       setLocalScanning(false);
@@ -213,9 +213,13 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
 
       {/* Flash message */}
       {flashMessage && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700 font-semibold flex items-center gap-2 animate-in fade-in duration-300">
+        <div className={`border rounded-xl px-4 py-3 text-sm font-semibold flex items-center gap-2 animate-in fade-in duration-300 ${
+          flashMessage.type === 'warning'
+            ? 'bg-amber-50 border-amber-200 text-amber-700'
+            : 'bg-green-50 border-green-200 text-green-700'
+        }`}>
           <CheckCircle2 size={16} />
-          {flashMessage}
+          {flashMessage.text}
         </div>
       )}
 
@@ -346,7 +350,7 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
               <div className="space-y-1">
                 {Object.entries(lastScanResult.categories).map(([cat, count]) => (
                   <div key={cat} className="flex justify-between text-xs">
-                    <span className="text-slate-500 capitalize">{cat.replace('_', ' ')}</span>
+                    <span className="text-slate-500 capitalize">{cat.replace(/_/g, ' ')}</span>
                     <span className="font-bold text-slate-700">{count}</span>
                   </div>
                 ))}

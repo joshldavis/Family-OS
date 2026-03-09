@@ -14,9 +14,25 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users, familyName }) => {
   const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [isJoin, setIsJoin] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
+
+    // Guard: no users in workspace yet
+    if (users.length === 0) {
+      setAuthError('No family members found. Please set up your workspace first.');
+      return;
+    }
+
+    // Placeholder invite-code validation for Join flow
+    // TODO: replace with real invite-code lookup (Supabase) in Phase 3
+    if (isJoin && inviteCode.trim().length < 4) {
+      setAuthError('Please enter a valid invite code.');
+      return;
+    }
+
     // Demo auth: find by email, fall back to first user
     // TODO: replace with real auth (Supabase) in Phase 3
     const user = users.find(u => u.email === email) || users[0];
@@ -100,6 +116,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users, familyName }) => {
                 />
               </div>
             </div>
+
+            {authError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2">
+                {authError}
+              </p>
+            )}
 
             <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100">
               {isJoin ? 'Join Workspace' : 'Sign In'}

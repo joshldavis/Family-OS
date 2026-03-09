@@ -144,7 +144,7 @@ function familyReducer(state: FamilyState, action: FamilyAction): FamilyState {
       return {
         ...state,
         events: state.events.map(e =>
-          e.id === action.payload.id ? action.payload : e
+          e.id === action.payload.id ? { ...action.payload, updatedAt: now } : e
         ),
       };
 

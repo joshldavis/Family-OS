@@ -41,7 +41,8 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
   const showFinance    = isEnabled('finance');
   const showEmailIntel = isEnabled('email-intelligence');
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   const todayAssignments = showSchoolwork ? assignments.filter(a => a.dueDate === todayStr) : [];
   const todayChores      = showChores     ? chores.filter(c => c.dueDate === todayStr)       : [];
@@ -207,9 +208,18 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
                     ))}
                   </>
                 )}
-                <Link to="/schoolwork" className="block text-center text-sm font-semibold text-indigo-600 hover:text-indigo-700 pt-2 border-t">
-                  View All Priority Tasks
-                </Link>
+                <div className="flex gap-4 justify-center pt-2 border-t">
+                  {overdueAssignments.length > 0 && (
+                    <Link to="/schoolwork" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                      View Schoolwork
+                    </Link>
+                  )}
+                  {overdueChores.length > 0 && (
+                    <Link to="/chores" className="text-sm font-semibold text-amber-600 hover:text-amber-700">
+                      View Chores
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
           )}

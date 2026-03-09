@@ -24,7 +24,11 @@ function loadFromStorage(): string[] | null {
 }
 
 function saveToStorage(ids: string[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ enabledModules: ids }));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ enabledModules: ids }));
+  } catch {
+    // Storage may be unavailable (QuotaExceededError, private browsing) — fail silently
+  }
 }
 
 // ── Context shape ─────────────────────────────────────────────────────────────
@@ -78,12 +82,12 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const enableModule = useCallback((id: string) => {
     const mod = getModule(id);
     if (!mod) return;
-    // Use functional updater to avoid stale closure — read prev state for dep check
     setEnabledModulesState(prev => {
+      if (prev.includes(id)) return prev; // already enabled — skip side effect
       const depsToEnable = (mod.dependencies ?? []).filter(dep => !prev.includes(dep));
+      mod.onEnable?.();
       return Array.from(new Set([...prev, ...depsToEnable, id]));
     });
-    mod.onEnable?.();
   }, []);
 
   const disableModule = useCallback((id: string) => {
@@ -99,24 +103,30 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const toggleModule = useCallback((id: string) => {
-    // Derive enabled state inside functional updater to avoid stale closure
+    const mod = getModule(id);
+    if (!mod) return;
+
+    // Capture current enabled state outside the updater to fire side effects after
     setEnabledModulesState(prev => {
       const isCurrentlyEnabled = prev.includes(id);
       if (isCurrentlyEnabled) {
-        const mod = getModule(id);
-        if (!mod || !mod.canDisable) return prev;
+        if (!mod.canDisable) return prev;
         const dependents = getDependents(id, prev);
-        mod.onDisable?.();
         return prev.filter(mid => mid !== id && !dependents.includes(mid));
       } else {
-        const mod = getModule(id);
-        if (!mod) return prev;
         const depsToEnable = (mod.dependencies ?? []).filter(dep => !prev.includes(dep));
-        mod.onEnable?.();
         return Array.from(new Set([...prev, ...depsToEnable, id]));
       }
     });
-  }, []);
+
+    // Fire side effects outside the updater so they run exactly once
+    // (reading enabledModules here is safe — we only need to know the pre-toggle state)
+    if (enabledModules.includes(id)) {
+      mod.onDisable?.();
+    } else {
+      mod.onEnable?.();
+    }
+  }, [enabledModules]);
 
   const setEnabledModules = useCallback((ids: string[]) => {
     // Always keep core modules

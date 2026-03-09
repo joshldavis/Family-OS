@@ -87,14 +87,15 @@ export async function fetchCoursework(
   courseId: string,
 ): Promise<ClassroomCoursework[]> {
   // TODO: Real Classroom API call
-  const tomorrow = new Date(Date.now() + 86400000);
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + 4); // 4 days from now, using setDate for correct month rollover
   return [
     {
       id: `cw-${courseId}-1`,
       courseId,
       title: `[Mock] Chapter Review — ${courseId}`,
       description: 'Complete the chapter review questions.',
-      dueDate: { year: tomorrow.getFullYear(), month: tomorrow.getMonth() + 1, day: tomorrow.getDate() + 3 },
+      dueDate: { year: dueDate.getFullYear(), month: dueDate.getMonth() + 1, day: dueDate.getDate() },
       dueTime: { hours: 23, minutes: 59 },
       maxPoints: 100,
       alternateLink: 'https://classroom.google.com',

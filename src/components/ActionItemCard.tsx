@@ -8,14 +8,16 @@ interface ActionItemCardProps {
   onMarkDone: (id: string) => void;
 }
 
-const urgencyConfig = {
+type Urgency = 'high' | 'medium' | 'low';
+
+const urgencyConfig: Record<Urgency, { border: string; bg: string; badge: string; label: string }> = {
   high:   { border: 'border-l-red-500',   bg: 'bg-red-50',   badge: 'bg-red-100 text-red-700',   label: 'Urgent' },
   medium: { border: 'border-l-amber-400', bg: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700', label: 'Soon' },
   low:    { border: 'border-l-slate-300', bg: 'bg-white',    badge: 'bg-slate-100 text-slate-600', label: 'FYI' },
 };
 
 const ActionItemCard: React.FC<ActionItemCardProps> = ({ item, onMarkDone }) => {
-  const cfg = urgencyConfig[item.urgency];
+  const cfg = urgencyConfig[item.urgency as Urgency] ?? urgencyConfig.low;
 
   const formatDeadline = (d: string | null) => {
     if (!d) return null;

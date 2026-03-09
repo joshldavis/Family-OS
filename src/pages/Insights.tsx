@@ -93,7 +93,7 @@ Events this week:
 ${events.map(e => `- ${e.title}: ${e.start}${e.location ? ' @ ' + e.location : ''}`).join('\n')}
 
 Budget ($${totalSpent} of $${totalBudget} spent):
-${budgets.map(b => `- ${b.name}: $${b.spent}/$${b.limit} (${Math.round((b.spent / b.limit) * 100)}%)`).join('\n')}
+${budgets.map(b => `- ${b.name}: $${b.spent}/$${b.limit} (${b.limit > 0 ? Math.round((b.spent / b.limit) * 100) : 0}%)`).join('\n')}
 
 Recent Transactions:
 ${transactions.slice(0, 8).map(t => `- ${t.description}: $${t.amount} (${t.type}, ${t.category})`).join('\n')}
