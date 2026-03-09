@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import {
   FamilyState,
   FamilyAction,
@@ -14,6 +14,26 @@ import {
   SEED_BUDGETS,
   SEED_SAVINGS,
 } from './db';
+import {
+  loadFamilyData,
+  subscribeToFamily,
+  upsertAssignment,
+  deleteAssignment,
+  upsertChore,
+  deleteChore,
+  upsertEvent,
+  deleteEvent,
+  upsertTransaction,
+  deleteTransaction,
+  upsertBudget,
+  upsertSavings,
+  toAssignment,
+  toChore,
+  toEvent,
+  toTransaction,
+  toBudget,
+  toSavings,
+} from './services/supabaseSync';
 
 // ─── Storage Key ──────────────────────────────────────────────────────────────
 
@@ -327,11 +347,164 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Gate persistence until hydration completes so we never overwrite saved data
   const [isHydrated, setIsHydrated] = React.useState(false);
 
-  // Hydrate from localStorage on mount
+  // Track recently-synced IDs to suppress echo from our own Supabase writes
+  const recentlySyncedIds = React.useRef<Set<string>>(new Set());
+  const trackSynced = (id: string) => {
+    recentlySyncedIds.current.add(id);
+    setTimeout(() => recentlySyncedIds.current.delete(id), 3000);
+  };
+
+  // ── Supabase-aware dispatch ──────────────────────────────────────────────
+  // Fires local dispatch immediately (optimistic), then syncs to Supabase async.
+  const syncDispatch = useCallback((action: FamilyAction) => {
+    // 1. Optimistic local update
+    dispatch(action);
+
+    // 2. Async Supabase sync — fire-and-forget, never blocks UI
+    const familyId = state.currentUser?.familyId ?? '';
+    if (!familyId) return; // No sync without a logged-in family
+
+    const now = new Date().toISOString();
+
+    switch (action.type) {
+      // ── Assignments ──────────────────────────────────────────────────────
+      case 'ADD_ASSIGNMENT':
+      case 'UPDATE_ASSIGNMENT':
+        trackSynced(action.payload.id);
+        upsertAssignment(action.payload, familyId);
+        break;
+
+      case 'COMPLETE_ASSIGNMENT': {
+        const a = state.assignments.find(x => x.id === action.payload.id);
+        if (a) {
+          const updated = {
+            ...a,
+            status: Status.DONE,
+            completedAt: now,
+            completedById: action.payload.completedById,
+            updatedAt: now,
+          };
+          trackSynced(a.id);
+          upsertAssignment(updated, familyId);
+        }
+        break;
+      }
+
+      case 'DELETE_ASSIGNMENT':
+        trackSynced(action.payload);
+        deleteAssignment(action.payload);
+        break;
+
+      // ── Chores ───────────────────────────────────────────────────────────
+      case 'ADD_CHORE':
+      case 'UPDATE_CHORE':
+        trackSynced(action.payload.id);
+        upsertChore(action.payload, familyId);
+        break;
+
+      case 'COMPLETE_CHORE': {
+        const c = state.chores.find(x => x.id === action.payload.id);
+        if (c) {
+          const updated = {
+            ...c,
+            status: Status.DONE,
+            completedAt: now,
+            completedById: action.payload.completedById,
+            updatedAt: now,
+          };
+          trackSynced(c.id);
+          upsertChore(updated, familyId);
+        }
+        break;
+      }
+
+      case 'UNCOMPLETE_CHORE': {
+        const c = state.chores.find(x => x.id === action.payload);
+        if (c) {
+          const updated = {
+            ...c,
+            status: Status.NOT_STARTED,
+            completedAt: undefined,
+            completedById: undefined,
+            updatedAt: now,
+          };
+          trackSynced(c.id);
+          upsertChore(updated, familyId);
+        }
+        break;
+      }
+
+      case 'DELETE_CHORE':
+        trackSynced(action.payload);
+        deleteChore(action.payload);
+        break;
+
+      // ── Events ───────────────────────────────────────────────────────────
+      case 'ADD_EVENT':
+      case 'UPDATE_EVENT':
+        trackSynced(action.payload.id);
+        upsertEvent(action.payload);
+        break;
+
+      case 'DELETE_EVENT':
+        trackSynced(action.payload);
+        deleteEvent(action.payload);
+        break;
+
+      // ── Finance ──────────────────────────────────────────────────────────
+      case 'ADD_TRANSACTION':
+        trackSynced(action.payload.id);
+        upsertTransaction(action.payload);
+        break;
+
+      case 'DELETE_TRANSACTION':
+        trackSynced(action.payload);
+        deleteTransaction(action.payload);
+        break;
+
+      case 'UPDATE_BUDGET':
+        trackSynced(action.payload.id);
+        upsertBudget(action.payload, familyId);
+        break;
+
+      case 'UPDATE_SAVINGS':
+        trackSynced(action.payload.id);
+        upsertSavings(action.payload, familyId);
+        break;
+
+      // ── No-op actions (auth/settings only touch localStorage) ────────────
+      default:
+        break;
+    }
+  }, [dispatch, state]); // Re-create when state changes so closures are fresh
+
+  // ── Hydrate from localStorage, then refresh from Supabase ───────────────
   useEffect(() => {
     const saved = loadFromStorage();
     if (saved) {
       dispatch({ type: 'HYDRATE', payload: saved });
+
+      // If there's a logged-in user with a family, fetch fresh data from Supabase
+      const familyId = saved.currentUser?.familyId;
+      if (familyId) {
+        loadFamilyData(familyId).then(data => {
+          if (data) {
+            console.info('[Sync] Hydrated from Supabase ✓');
+            dispatch({
+              type: 'HYDRATE',
+              payload: {
+                students: data.students,
+                assignments: data.assignments,
+                chores: data.chores,
+                events: data.events,
+                transactions: data.transactions,
+                budgets: data.budgets,
+                savings: data.savings,
+              },
+            });
+          }
+        }).catch(err => console.warn('[Sync] Supabase hydration failed, using localStorage', err));
+      }
     }
     setIsHydrated(true);
   }, []);
@@ -341,8 +514,65 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (isHydrated) saveToStorage(state);
   }, [state, isHydrated]);
 
+  // ── Supabase real-time subscription ─────────────────────────────────────
+  // Subscribes when a family is logged in; unsubscribes on family change / logout.
+  useEffect(() => {
+    const familyId = state.currentUser?.familyId;
+    if (!familyId) return;
+
+    const unsubscribe = subscribeToFamily(familyId, (payload) => {
+      // Skip changes we just wrote ourselves (suppress echo)
+      const recordId: string | undefined = payload.new?.id ?? payload.old?.id;
+      if (recordId && recentlySyncedIds.current.has(recordId)) return;
+
+      if (payload.eventType === 'DELETE') {
+        switch (payload.table) {
+          case 'assignments': dispatch({ type: 'DELETE_ASSIGNMENT', payload: payload.old.id }); break;
+          case 'chores':      dispatch({ type: 'DELETE_CHORE',      payload: payload.old.id }); break;
+          case 'events':      dispatch({ type: 'DELETE_EVENT',      payload: payload.old.id }); break;
+          case 'transactions': dispatch({ type: 'DELETE_TRANSACTION', payload: payload.old.id }); break;
+        }
+      } else {
+        // INSERT or UPDATE — map DB row to app type and dispatch
+        switch (payload.table) {
+          case 'assignments':
+            dispatch({
+              type: payload.eventType === 'INSERT' ? 'ADD_ASSIGNMENT' : 'UPDATE_ASSIGNMENT',
+              payload: toAssignment(payload.new),
+            });
+            break;
+          case 'chores':
+            dispatch({
+              type: payload.eventType === 'INSERT' ? 'ADD_CHORE' : 'UPDATE_CHORE',
+              payload: toChore(payload.new),
+            });
+            break;
+          case 'events':
+            dispatch({
+              type: payload.eventType === 'INSERT' ? 'ADD_EVENT' : 'UPDATE_EVENT',
+              payload: toEvent(payload.new),
+            });
+            break;
+          case 'transactions':
+            if (payload.eventType === 'INSERT') {
+              dispatch({ type: 'ADD_TRANSACTION', payload: toTransaction(payload.new) });
+            }
+            break;
+          case 'budgets':
+            dispatch({ type: 'UPDATE_BUDGET', payload: toBudget(payload.new) });
+            break;
+          case 'savings_goals':
+            dispatch({ type: 'UPDATE_SAVINGS', payload: toSavings(payload.new) });
+            break;
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [state.currentUser?.familyId]); // Re-subscribe when family changes
+
   return (
-    <FamilyContext.Provider value={{ state, dispatch }}>
+    <FamilyContext.Provider value={{ state, dispatch: syncDispatch }}>
       {children}
     </FamilyContext.Provider>
   );

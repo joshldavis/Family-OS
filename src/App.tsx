@@ -54,6 +54,8 @@ import { ICON_MAP } from './modules/iconMap';
 
 // Global state context (Phase 3)
 import { FamilyProvider, useFamily } from './FamilyContext';
+import { pushFamilyData, loadFamilyData } from './services/supabaseSync';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 // Pages
 import Dashboard         from './pages/Dashboard';
@@ -118,6 +120,60 @@ const AppInner: React.FC = () => {
 
   const activeFamilyUsers: User[] = profile?.users ?? MOCK_USERS;
   const activeFamily: Family      = profile?.family ?? MOCK_FAMILY;
+
+  // ── Supabase auth session listener ───────────────────────────────────
+  // Handles session restoration (browser refresh, OAuth redirect, etc.)
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user && !state.currentUser) {
+        // Look up the profile and hydrate if not already logged in
+        try {
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('auth_id', session.user.id)
+            .single();
+
+          if (profileRow) {
+            const user: User = {
+              id:       profileRow.id,
+              familyId: profileRow.family_id,
+              name:     profileRow.name,
+              email:    profileRow.email ?? session.user.email ?? '',
+              role:     profileRow.role as Role,
+              avatar:   profileRow.avatar_url ?? undefined,
+            };
+            dispatch({ type: 'LOGIN', payload: user });
+
+            // Hydrate family data from Supabase
+            const data = await loadFamilyData(profileRow.family_id);
+            if (data) {
+              dispatch({
+                type: 'HYDRATE',
+                payload: {
+                  students: data.students,
+                  assignments: data.assignments,
+                  chores: data.chores,
+                  events: data.events,
+                  transactions: data.transactions,
+                  budgets: data.budgets,
+                  savings: data.savings,
+                },
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[Auth] Session restoration failed', err);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        dispatch({ type: 'LOGOUT' });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Extra-module state (not in FamilyContext) ─────────────────────────
   const [recipes,            setRecipes]            = useLocalStorage<Recipe[]>('family_os_recipes',          SEED_RECIPES);
@@ -220,6 +276,17 @@ const AppInner: React.FC = () => {
         savings: appData.savings,
       },
     });
+
+    // Push initial family data to Supabase (fire-and-forget)
+    pushFamilyData(appData.family, appData.users, {
+      students:     appData.students,
+      assignments:  appData.assignments,
+      chores:       appData.chores,
+      events:       appData.events,
+      transactions: appData.transactions,
+      budgets:      appData.budgets,
+      savings:      appData.savings,
+    }).catch(err => console.warn('[Sync] onboarding push failed', err));
 
     if (data.emailConfig) {
       setEmailScanConfig(prev => ({
