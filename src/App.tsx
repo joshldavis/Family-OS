@@ -163,6 +163,22 @@ const AppInner: React.FC = () => {
     briefingFired.current = true;
 
     const today = new Date().toLocaleDateString('en-CA');
+
+    // Count empty meal slots across the next 7 days
+    const mealTypes: string[] = ['Breakfast', 'Lunch', 'Dinner'];
+    let missingMeals = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const dateStr = d.toLocaleDateString('en-CA');
+      for (const mt of mealTypes) {
+        const filled = mealPlan.some(
+          e => e.date === dateStr && e.mealType === mt && (e.recipeId || e.customMeal),
+        );
+        if (!filled) missingMeals++;
+      }
+    }
+
     const ctx: BriefingContext = {
       overdueChores: state.chores
         .filter(c => c.status !== 'Done' && c.dueDate < today)
@@ -173,7 +189,7 @@ const AppInner: React.FC = () => {
       todayEvents: state.events
         .filter(e => e.start.startsWith(today))
         .map(e => e.title),
-      missingMeals: 0,
+      missingMeals,
     };
     fireMorningBriefing(ctx);
   }, [state.currentUser]); // eslint-disable-line react-hooks/exhaustive-deps

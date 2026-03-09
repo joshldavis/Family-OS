@@ -18,11 +18,14 @@ import {
   Sparkles,
   Pencil,
   Trash2,
-  X
+  X,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import AIScanModal from '../components/AIScanModal';
 import { useFamily } from '../FamilyContext';
+import { useSpeechInput } from '../hooks/useSpeechInput';
 
 const Schoolwork: React.FC = () => {
   const { state, dispatch } = useFamily();
@@ -39,6 +42,18 @@ const Schoolwork: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+
+  // Voice input for assignment title
+  const [assignTitleValue, setAssignTitleValue] = useState('');
+  const {
+    isListening: assignMicListening,
+    isSupported: speechSupported,
+    startListening: startAssignMic,
+    stopListening: stopAssignMic,
+  } = useSpeechInput({
+    onTranscript: (t) => setAssignTitleValue(t),
+    onFinalTranscript: (t) => setAssignTitleValue(t),
+  });
 
   // Helper for timezone-safe date display
   const formatDisplayDate = (dateStr: string) => {
@@ -82,11 +97,13 @@ const Schoolwork: React.FC = () => {
   };
 
   const openEditModal = (assignment: Assignment) => {
+    setAssignTitleValue(assignment.title);
     setEditingAssignment(assignment);
     setIsModalOpen(true);
   };
 
   const openCreateModal = () => {
+    setAssignTitleValue('');
     setEditingAssignment(null);
     setIsModalOpen(true);
   };
@@ -97,7 +114,7 @@ const Schoolwork: React.FC = () => {
     const now = new Date().toISOString();
 
     const assignmentData = {
-      title: formData.get('title') as string,
+      title: assignTitleValue || formData.get('title') as string,
       subject: formData.get('subject') as string,
       studentId: formData.get('studentId') as string,
       dueDate: formData.get('dueDate') as string,
@@ -123,6 +140,7 @@ const Schoolwork: React.FC = () => {
       });
     }
 
+    setAssignTitleValue('');
     setIsModalOpen(false);
   };
 
@@ -467,20 +485,33 @@ const Schoolwork: React.FC = () => {
               <h2 className="text-xl font-bold text-slate-900">
                 {editingAssignment ? 'Edit Assignment' : 'New Assignment'}
               </h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+              <button onClick={() => { setAssignTitleValue(''); setIsModalOpen(false); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                 <X size={20} className="text-slate-500" />
               </button>
             </div>
             <form onSubmit={handleSaveAssignment} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Title</label>
-                <input
-                  name="title"
-                  defaultValue={editingAssignment?.title}
-                  required
-                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
-                  placeholder="e.g. History Essay"
-                />
+                <div className="flex gap-2">
+                  <input
+                    name="title"
+                    value={assignTitleValue}
+                    onChange={e => setAssignTitleValue(e.target.value)}
+                    required
+                    className="flex-1 px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                    placeholder={assignMicListening ? 'Listening…' : 'e.g. History Essay'}
+                  />
+                  {speechSupported && (
+                    <button
+                      type="button"
+                      onClick={assignMicListening ? stopAssignMic : startAssignMic}
+                      title={assignMicListening ? 'Stop listening' : 'Dictate title'}
+                      className={`px-3 rounded-xl border transition-colors ${assignMicListening ? 'bg-red-500 text-white border-red-500 animate-pulse' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
+                    >
+                      {assignMicListening ? <MicOff size={16} /> : <Mic size={16} />}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
