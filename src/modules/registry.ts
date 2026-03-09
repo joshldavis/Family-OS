@@ -17,6 +17,7 @@ import emailIntelligence from './definitions/emailIntelligence';
 import aiScan           from './definitions/aiScan';
 import wellness         from './definitions/wellness';
 import goals           from './definitions/goals';
+import health          from './definitions/health';
 
 /**
  * Canonical ordered list of all modules.
@@ -31,6 +32,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   finance,
   mealPlanning,
   wellness,
+  health,
   shopping,
   allowance,
   pinboard,

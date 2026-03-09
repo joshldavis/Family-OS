@@ -58,7 +58,12 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const stored = loadFromStorage();
     const base = stored ?? getDefaultEnabledModules();
     const coreIds = MODULE_REGISTRY.filter(m => !m.canDisable).map(m => m.id);
-    const merged = Array.from(new Set([...coreIds, ...base]));
+    // Any new module added with defaultEnabled:true should auto-activate even
+    // for users who already have stored preferences (first-launch auto-opt-in).
+    const newDefaultIds = MODULE_REGISTRY
+      .filter(m => m.defaultEnabled && m.canDisable && stored !== null && !base.includes(m.id))
+      .map(m => m.id);
+    const merged = Array.from(new Set([...coreIds, ...base, ...newDefaultIds]));
     return merged;
   });
 

@@ -2,9 +2,10 @@
 import React, { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { Chore, Status, User, Frequency } from '../types';
-import { Plus, CheckSquare, Square, Trash2, Calendar, User as UserIcon, Sparkles, X, Wand2, Loader2, CheckCircle2 } from 'lucide-react';
+import { Plus, CheckSquare, Square, Trash2, Calendar, User as UserIcon, Sparkles, X, Wand2, Loader2, CheckCircle2, Mic, MicOff } from 'lucide-react';
 import AIScanModal from '../components/AIScanModal';
 import { useFamily } from '../FamilyContext';
+import { useSpeechInput } from '../hooks/useSpeechInput';
 
 interface ChoresProps {
   users: User[];
@@ -21,6 +22,12 @@ const Chores: React.FC<ChoresProps> = ({ users }) => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isAutoScheduling, setIsAutoScheduling] = useState(false);
   const [autoScheduleResult, setAutoScheduleResult] = useState<string | null>(null);
+  const [choreTitleValue, setChoreTitleValue] = useState('');
+
+  const { isListening: choreMicListening, isSupported: speechSupported, startListening: startChoreMic, stopListening: stopChoreMic } = useSpeechInput({
+    onFinalTranscript: (text) => setChoreTitleValue(text),
+    onTranscript: (text) => setChoreTitleValue(text),
+  });
 
   const toggleChore = (id: string) => {
     const chore = chores.find(c => c.id === id);
@@ -61,6 +68,7 @@ const Chores: React.FC<ChoresProps> = ({ users }) => {
 
     dispatch({ type: 'ADD_CHORE', payload: newChore });
     setIsModalOpen(false);
+    setChoreTitleValue('');
   };
 
   const handleAIScanResult = (extractedList: any[]) => {
@@ -274,19 +282,33 @@ Rules:
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b flex justify-between items-center bg-indigo-50/30">
               <h2 className="text-xl font-bold text-slate-900">Add New Chore</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+              <button onClick={() => { setIsModalOpen(false); setChoreTitleValue(''); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                 <X size={20} className="text-slate-500" />
               </button>
             </div>
             <form onSubmit={handleSaveChore} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Chore Title</label>
-                <input
-                  name="title"
-                  required
-                  className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
-                  placeholder="e.g. Mow the Lawn"
-                />
+                <div className="flex gap-2">
+                  <input
+                    name="title"
+                    required
+                    value={choreTitleValue}
+                    onChange={e => setChoreTitleValue(e.target.value)}
+                    className="flex-1 px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                    placeholder={choreMicListening ? 'Listening…' : 'e.g. Mow the Lawn'}
+                  />
+                  {speechSupported && (
+                    <button
+                      type="button"
+                      onClick={choreMicListening ? stopChoreMic : startChoreMic}
+                      title={choreMicListening ? 'Stop' : 'Dictate title'}
+                      className={`px-3 rounded-xl border transition-colors ${choreMicListening ? 'bg-red-500 text-white border-red-500' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-indigo-300'}`}
+                    >
+                      {choreMicListening ? <MicOff size={16} /> : <Mic size={16} />}
+                    </button>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Assign To</label>

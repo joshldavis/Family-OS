@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, Role, Reward, RewardTransaction } from '../types';
-import { Trophy, Plus, X, Star, Gift, History, Zap, Trash2, TrendingUp } from 'lucide-react';
+import { Trophy, Plus, X, Star, Gift, History, Zap, Trash2, TrendingUp, ExternalLink } from 'lucide-react';
 
 interface AllowanceProps {
   users: User[];
@@ -80,6 +80,14 @@ const Allowance: React.FC<AllowanceProps> = ({
   const streak = getStreak(selectedChild);
   const allTimeEarned = rewardTransactions.filter(t => t.userId === selectedChild && t.type === 'earned').reduce((a, t) => a + t.points, 0);
 
+  // Points → dollar conversion (100 pts = $1)
+  const POINTS_PER_DOLLAR = 100;
+  const allowanceDollars = (balance / POINTS_PER_DOLLAR).toFixed(2);
+  const allowanceNote = encodeURIComponent(`Weekly allowance for ${child?.name?.split(' ')[0] ?? 'child'} 🏆`);
+
+  const openVenmo = () => window.open(`venmo://paycharge?txn=pay&amount=${allowanceDollars}&note=${allowanceNote}`, '_blank');
+  const openZelle = () => window.open(`zelle://pay?amount=${allowanceDollars}&memo=${allowanceNote}`, '_blank');
+
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -120,7 +128,23 @@ const Allowance: React.FC<AllowanceProps> = ({
           <div className="relative z-10">
             <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Point Balance</p>
             <p className="text-5xl font-bold mb-1">{balance}</p>
-            <p className="text-indigo-200 text-sm">points available</p>
+            <p className="text-indigo-200 text-sm">≈ ${allowanceDollars} allowance</p>
+            {balance > 0 && (
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={openVenmo}
+                  className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <ExternalLink size={12} /> Pay via Venmo
+                </button>
+                <button
+                  onClick={openZelle}
+                  className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <ExternalLink size={12} /> Pay via Zelle
+                </button>
+              </div>
+            )}
           </div>
           <Trophy size={64} className="absolute right-4 bottom-4 text-white/10" />
         </div>

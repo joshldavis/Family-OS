@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { CalendarEvent, Assignment, Status } from '../types';
 import {
   MapPin,
@@ -15,6 +16,9 @@ import {
   X,
   LayoutGrid,
   List,
+  MessageSquare,
+  Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { useFamily } from '../FamilyContext';
 
@@ -266,6 +270,15 @@ const Calendar: React.FC = () => {
   const [eventFormError, setEventFormError] = useState<string | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Chat parser ────────────────────────────────────────────────────────
+  const [chatParserOpen, setChatParserOpen] = useState(false);
+  const [chatText, setChatText] = useState('');
+  const [chatParsing, setChatParsing] = useState(false);
+  const [chatResults, setChatResults] = useState<Array<{
+    title: string; date: string; time?: string; location?: string; selected: boolean;
+  }> | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
+
   useEffect(() => {
     return () => {
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
@@ -306,6 +319,78 @@ const Calendar: React.FC = () => {
   }, [mergedItems]);
 
   const dates = Object.keys(groupedItems).sort();
+
+  const parseChatText = async () => {
+    if (!chatText.trim()) return;
+    setChatParsing(true);
+    setChatError(null);
+    setChatResults(null);
+    try {
+      const apiKey = import.meta.env.VITE_API_KEY || '';
+      if (!apiKey) throw new Error('No API key');
+      const ai = new GoogleGenAI({ apiKey });
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      const prompt = `Extract ALL events, dates, and appointments from this message/chat thread.
+Today's date: ${todayStr}
+
+Message:
+${chatText}
+
+Return a JSON array of events. Each event:
+{"title":"Event Name","date":"YYYY-MM-DD","time":"HH:MM (optional)","location":"Location (optional)"}
+
+If only a weekday is mentioned (e.g. "Friday"), calculate the next occurrence from today.
+Only return the JSON array. No explanation.`;
+
+      const result = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: [{ parts: [{ text: prompt }] }],
+        config: { responseMimeType: 'application/json' },
+      });
+
+      const parsed = JSON.parse(result.text || '[]') as Array<{
+        title: string; date: string; time?: string; location?: string;
+      }>;
+
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        setChatError('No events found in that text. Try pasting a message with dates or times.');
+        return;
+      }
+
+      setChatResults(parsed.map(e => ({ ...e, selected: true })));
+    } catch {
+      setChatError('Could not parse the message. Check your Gemini API key.');
+    } finally {
+      setChatParsing(false);
+    }
+  };
+
+  const addChatEvents = () => {
+    if (!chatResults) return;
+    const now = new Date().toISOString();
+    chatResults.filter(r => r.selected).forEach(e => {
+      const start = e.time ? `${e.date}T${e.time}` : `${e.date}T09:00`;
+      const [h, m] = (e.time || '09:00').split(':').map(Number);
+      const endHour = String(Math.min(h + 1, 23)).padStart(2, '0');
+      const end = e.time ? `${e.date}T${endHour}:${String(m).padStart(2, '0')}` : `${e.date}T10:00`;
+      dispatch({
+        type: 'ADD_EVENT',
+        payload: {
+          id: `chat-${Date.now()}-${Math.random()}`,
+          familyId: 'fam-1',
+          title: e.title,
+          start,
+          end,
+          location: e.location,
+          createdAt: now,
+        },
+      });
+    });
+    setChatParserOpen(false);
+    setChatText('');
+    setChatResults(null);
+  };
 
   const handleSync = () => {
     if (!isGoogleLinked) return;
@@ -408,6 +493,13 @@ const Calendar: React.FC = () => {
               {isSyncing ? 'Syncing...' : syncComplete ? 'Synced' : 'Sync Google'}
             </button>
           )}
+          <button
+            onClick={() => setChatParserOpen(true)}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg font-semibold hover:bg-slate-50 transition-colors shadow-sm text-sm"
+          >
+            <MessageSquare size={18} />
+            Paste Chat
+          </button>
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm text-sm"
@@ -634,6 +726,100 @@ const Calendar: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ── Chat Parser Modal ── */}
+      {chatParserOpen && (
+        <div className="fixed inset-0 z-[110] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 border-b flex items-center justify-between sticky top-0 bg-white rounded-t-3xl z-10">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <MessageSquare size={20} className="text-indigo-500" />
+                  Paste Chat / Message
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">Paste any iMessage, WhatsApp, or email thread and AI will extract events.</p>
+              </div>
+              <button onClick={() => { setChatParserOpen(false); setChatText(''); setChatResults(null); setChatError(null); }} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {!chatResults ? (
+                <>
+                  <textarea
+                    autoFocus
+                    value={chatText}
+                    onChange={e => setChatText(e.target.value)}
+                    placeholder="Paste your group chat, iMessage thread, or any message containing dates and events..."
+                    rows={8}
+                    className="w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  />
+                  {chatError && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2">{chatError}</p>
+                  )}
+                  <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-700">
+                    <Sparkles size={14} className="text-indigo-500 flex-shrink-0" />
+                    Works with iMessage, WhatsApp, GroupMe, Remind, email — anything with dates and times.
+                  </div>
+                  <button
+                    onClick={parseChatText}
+                    disabled={!chatText.trim() || chatParsing}
+                    className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50"
+                  >
+                    {chatParsing ? <><Loader2 size={18} className="animate-spin" /> Extracting events…</> : <><Sparkles size={18} /> Extract Events with AI</>}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 size={16} className="text-green-500" />
+                    <p className="text-sm font-semibold text-slate-900">Found {chatResults.length} event{chatResults.length !== 1 ? 's' : ''}. Select which to add:</p>
+                  </div>
+                  <div className="space-y-2">
+                    {chatResults.map((result, i) => (
+                      <label
+                        key={i}
+                        className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${result.selected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={result.selected}
+                          onChange={() => setChatResults(prev => prev!.map((r, j) => j === i ? { ...r, selected: !r.selected } : r))}
+                          className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-900 text-sm">{result.title}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {result.date}
+                            {result.time && ` · ${result.time}`}
+                            {result.location && ` · 📍 ${result.location}`}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => { setChatResults(null); setChatError(null); }}
+                      className="flex-1 border rounded-xl py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={addChatEvents}
+                      disabled={!chatResults.some(r => r.selected)}
+                      className="flex-1 bg-indigo-600 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    >
+                      Add {chatResults.filter(r => r.selected).length} Event{chatResults.filter(r => r.selected).length !== 1 ? 's' : ''}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

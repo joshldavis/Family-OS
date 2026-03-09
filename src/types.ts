@@ -514,3 +514,47 @@ export interface FamilyDocument {
   fileUrl?: string;
   createdAt: string;
 }
+
+// ─── Health Tracker Types ─────────────────────────────────────────────────────
+
+export type MedicationFrequency = 'daily' | 'twice-daily' | 'weekly' | 'as-needed';
+
+export interface Medication {
+  id: string;
+  familyId: string;
+  memberId: string;        // User id
+  name: string;
+  dosage: string;          // e.g. "10mg"
+  frequency: MedicationFrequency;
+  instructions?: string;
+  startDate?: string;
+  endDate?: string;        // undefined = ongoing
+  refillDate?: string;
+  createdAt: string;
+}
+
+export type AppointmentType = 'Doctor' | 'Dentist' | 'Vision' | 'Therapy' | 'Other';
+
+export interface HealthAppointment {
+  id: string;
+  familyId: string;
+  memberId: string;
+  title: string;
+  type: AppointmentType;
+  date: string;            // YYYY-MM-DD
+  time?: string;           // HH:MM
+  location?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface VitalRecord {
+  id: string;
+  familyId: string;
+  memberId: string;
+  date: string;
+  weight?: number;         // lbs
+  height?: number;         // inches
+  bloodPressure?: string;  // e.g. "120/80"
+  notes?: string;
+}

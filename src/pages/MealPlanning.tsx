@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { Recipe, MealPlanEntry, MealType, ShoppingList, ShoppingItem, ShoppingCategory } from '../types';
 import {
   ChefHat,
@@ -14,6 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
+  Loader2,
+  Wand2,
 } from 'lucide-react';
 
 interface MealPlanningProps {
@@ -58,6 +61,8 @@ const MealPlanning: React.FC<MealPlanningProps> = ({
   const [pickerOpen, setPickerOpen] = useState<{ date: string; mealType: MealType } | null>(null);
   const [addRecipeOpen, setAddRecipeOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
+  const [isGeneratingSuggest, setIsGeneratingSuggest] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
 
   // Recipe form state
   const [recipeForm, setRecipeForm] = useState({
@@ -161,6 +166,122 @@ const MealPlanning: React.FC<MealPlanningProps> = ({
     r.tags.some(t => t.toLowerCase().includes(pickerSearch.toLowerCase()))
   );
 
+  const aiSuggest = async () => {
+    if (!pickerOpen) return;
+    setIsGeneratingSuggest(true);
+    setSuggestError(null);
+    try {
+      const apiKey = import.meta.env.VITE_API_KEY || '';
+      if (!apiKey) throw new Error('No API key');
+      const ai = new GoogleGenAI({ apiKey });
+
+      // Recent 7 days of meals for context
+      const recentMeals = mealPlan
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 14)
+        .map(e => {
+          const r = getRecipe(e.recipeId);
+          return r ? r.name : (e.customMeal ?? '');
+        })
+        .filter(Boolean);
+
+      const recipeNames = recipes.map(r => `${r.name} (${r.tags.join(', ')})`).join(', ') || 'none saved';
+      const prompt = `You are a helpful meal planner for a family. Suggest ONE ${pickerOpen.mealType} idea for ${pickerOpen.date}.
+
+Available recipes in library: ${recipeNames}
+Recently planned meals (avoid repeating): ${recentMeals.join(', ') || 'none'}
+
+Respond ONLY with a JSON object like:
+{"name":"Recipe Name","isFromLibrary":true}
+if the suggestion matches a library recipe exactly, or:
+{"name":"Custom Meal Name","isFromLibrary":false}
+for something new. No explanation. Just the JSON.`;
+
+      const result = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: [{ parts: [{ text: prompt }] }],
+        config: { responseMimeType: 'application/json' },
+      });
+
+      const parsed = JSON.parse(result.text || '{}') as { name: string; isFromLibrary: boolean };
+      if (!parsed.name) throw new Error('Empty suggestion');
+
+      // Try to match to existing recipe (case-insensitive)
+      const matched = recipes.find(r => r.name.toLowerCase() === parsed.name.toLowerCase());
+      if (matched) {
+        assignMeal(matched.id, null);
+      } else {
+        assignMeal(null, parsed.name);
+      }
+    } catch {
+      setSuggestError('Could not get suggestion. Check your Gemini API key.');
+      setTimeout(() => setSuggestError(null), 4000);
+    } finally {
+      setIsGeneratingSuggest(false);
+    }
+  };
+
+  const planWeekWithAI = async () => {
+    setIsGeneratingSuggest(true);
+    setSuggestError(null);
+    try {
+      const apiKey = import.meta.env.VITE_API_KEY || '';
+      if (!apiKey) throw new Error('No API key');
+      const ai = new GoogleGenAI({ apiKey });
+
+      const recipeList = recipes.map(r => r.name).join(', ') || 'none';
+      const existingMeals = mealPlan.filter(e => weekDates.includes(e.date));
+      const emptySlots = weekDates.flatMap(date =>
+        MEAL_TYPES.filter(mt => !existingMeals.find(e => e.date === date && e.mealType === mt))
+          .map(mt => `${date} ${mt}`)
+      );
+
+      if (emptySlots.length === 0) {
+        setSuggestError('All meal slots for this week are already filled!');
+        return;
+      }
+
+      const prompt = `Plan meals for a family for these empty meal slots: ${emptySlots.join(', ')}.
+Available recipes: ${recipeList}
+Return a JSON array of objects: [{"date":"YYYY-MM-DD","mealType":"breakfast|lunch|dinner","name":"Meal Name","isFromLibrary":true|false}]
+Only return JSON. No explanation.`;
+
+      const result = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: [{ parts: [{ text: prompt }] }],
+        config: { responseMimeType: 'application/json' },
+      });
+
+      const suggestions = JSON.parse(result.text || '[]') as Array<{
+        date: string; mealType: MealType; name: string; isFromLibrary: boolean;
+      }>;
+
+      const newEntries = suggestions.map(s => {
+        const matched = recipes.find(r => r.name.toLowerCase() === s.name.toLowerCase());
+        return {
+          id: `mp-ai-${Date.now()}-${Math.random()}`,
+          familyId: 'fam-1',
+          date: s.date,
+          mealType: s.mealType,
+          recipeId: matched?.id ?? null,
+          customMeal: matched ? null : s.name,
+        };
+      }).filter(e => weekDates.includes(e.date));
+
+      setMealPlan(prev => {
+        const filtered = prev.filter(e =>
+          !(weekDates.includes(e.date) && newEntries.find(n => n.date === e.date && n.mealType === e.mealType))
+        );
+        return [...filtered, ...newEntries];
+      });
+    } catch {
+      setSuggestError('Could not plan week. Check your Gemini API key.');
+      setTimeout(() => setSuggestError(null), 5000);
+    } finally {
+      setIsGeneratingSuggest(false);
+    }
+  };
+
   const todayStr = new Date().toISOString().split('T')[0];
 
   return (
@@ -176,14 +297,22 @@ const MealPlanning: React.FC<MealPlanningProps> = ({
             className="flex items-center gap-2 bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-lg font-semibold hover:bg-indigo-50 transition-colors shadow-sm text-sm"
           >
             <ShoppingCart size={18} />
-            Generate Shopping List
+            Shopping List
           </button>
           <button
             onClick={() => setAddRecipeOpen(true)}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm text-sm"
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg font-semibold hover:bg-slate-50 transition-colors shadow-sm text-sm"
           >
             <Plus size={18} />
             Add Recipe
+          </button>
+          <button
+            onClick={planWeekWithAI}
+            disabled={isGeneratingSuggest}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm text-sm disabled:opacity-50"
+          >
+            {isGeneratingSuggest ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+            Plan Week with AI
           </button>
         </div>
       </header>
@@ -349,14 +478,30 @@ const MealPlanning: React.FC<MealPlanningProps> = ({
                   <X size={20} />
                 </button>
               </div>
-              <input
-                autoFocus
-                type="text"
-                placeholder="Search recipes or type a custom meal..."
-                value={pickerSearch}
-                onChange={e => setPickerSearch(e.target.value)}
-                className="mt-4 w-full border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <div className="mt-4 flex gap-2">
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Search recipes or type a custom meal..."
+                  value={pickerSearch}
+                  onChange={e => setPickerSearch(e.target.value)}
+                  className="flex-1 border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={aiSuggest}
+                  disabled={isGeneratingSuggest}
+                  title="Let Gemini suggest a meal"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-colors flex-shrink-0"
+                >
+                  {isGeneratingSuggest
+                    ? <Loader2 size={14} className="animate-spin" />
+                    : <Wand2 size={14} />}
+                  Suggest
+                </button>
+              </div>
+              {suggestError && (
+                <p className="mt-2 text-xs text-red-500 font-medium">{suggestError}</p>
+              )}
             </div>
             <div className="p-4 max-h-72 overflow-y-auto space-y-2">
               {pickerSearch && (

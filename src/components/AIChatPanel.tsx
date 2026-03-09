@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { Sparkles, X, Send, Loader2, Bot, User as UserIcon, Lightbulb } from 'lucide-react';
+import { Sparkles, X, Send, Loader2, Bot, User as UserIcon, Lightbulb, Mic, MicOff } from 'lucide-react';
+import { useSpeechInput } from '../hooks/useSpeechInput';
 
 interface ChatMessage {
   id: string;
@@ -27,6 +28,11 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const { isListening, isSupported: speechSupported, startListening, stopListening } = useSpeechInput({
+    onFinalTranscript: (text) => setInput(text),
+    onTranscript: (text) => setInput(text),
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -203,6 +209,12 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
 
           {/* Input */}
           <div className="p-4 border-t bg-white">
+            {isListening && (
+              <div className="mb-2 flex items-center gap-2 text-xs text-red-500 font-semibold animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                Listening… speak now
+              </div>
+            )}
             <div className="flex items-center gap-2 bg-slate-50 border rounded-xl p-1">
               <input
                 ref={inputRef}
@@ -210,10 +222,23 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about your family..."
+                placeholder={isListening ? 'Listening…' : 'Ask about your family…'}
                 className="flex-1 bg-transparent px-3 py-2 text-sm focus:outline-none"
                 disabled={isLoading}
               />
+              {speechSupported && (
+                <button
+                  onClick={isListening ? stopListening : startListening}
+                  title={isListening ? 'Stop listening' : 'Speak your question'}
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                    isListening
+                      ? 'bg-red-500 hover:bg-red-600 text-white'
+                      : 'bg-slate-200 hover:bg-slate-300 text-slate-600'
+                  }`}
+                >
+                  {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+                </button>
+              )}
               <button
                 onClick={() => sendMessage(input)}
                 disabled={!input.trim() || isLoading}
