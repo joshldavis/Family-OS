@@ -1,5 +1,5 @@
 
-import React, { useState, ComponentType } from 'react';
+import React, { useState, useEffect, useRef, ComponentType } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import {
@@ -44,6 +44,9 @@ import {
   SEED_DOCUMENTS,
   generateFamilyData,
 } from './db';
+
+// Notifications
+import { useNotifications, BriefingContext } from './hooks/useNotifications';
 
 // Module system
 import { ModuleProvider, useModules } from './modules/ModuleContext';
@@ -143,6 +146,38 @@ const AppInner: React.FC = () => {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  // ── Notifications ─────────────────────────────────────────────────────
+  const {
+    permission: notifPermission,
+    settings: notifSettings,
+    updateSettings: updateNotifSettings,
+    requestPermission: requestNotifPermission,
+    fireMorningBriefing,
+    sendTestNotification,
+  } = useNotifications();
+
+  // Fire morning briefing once per day when the user is logged in
+  const briefingFired = useRef(false);
+  useEffect(() => {
+    if (!state.currentUser || briefingFired.current) return;
+    briefingFired.current = true;
+
+    const today = new Date().toLocaleDateString('en-CA');
+    const ctx: BriefingContext = {
+      overdueChores: state.chores
+        .filter(c => c.status !== 'Done' && c.dueDate < today)
+        .map(c => c.title),
+      dueTodayAssignments: state.assignments
+        .filter(a => a.status !== 'Done' && a.dueDate === today)
+        .map(a => a.title),
+      todayEvents: state.events
+        .filter(e => e.start.startsWith(today))
+        .map(e => e.title),
+      missingMeals: 0,
+    };
+    fireMorningBriefing(ctx);
+  }, [state.currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Onboarding complete ───────────────────────────────────────────────
   const handleOnboardingComplete = (data: OnboardingData) => {
     const appData = generateFamilyData(data);
@@ -202,6 +237,7 @@ const AppInner: React.FC = () => {
       'family_os_habits', 'family_os_habit_checkins', 'family_os_family_goals', 'family_os_health_log',
       'family_os_active_goals',
       'family_os_medications', 'family_os_appointments', 'family_os_vitals',
+      'family_os_notification_settings', 'family_os_last_briefing_date',
       'family_os_module_preferences', 'family_os_v2',
     ].forEach(k => localStorage.removeItem(k));
     window.location.reload();
@@ -310,6 +346,11 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
           onResetData: handleResetData,
           emailScanConfig,
           onUpdateEmailConfig: handleUpdateEmailConfig,
+          notifPermission,
+          notifSettings,
+          onUpdateNotifSettings: updateNotifSettings,
+          onRequestNotifPermission: requestNotifPermission,
+          onTestNotification: sendTestNotification,
         };
       default:
         return {};

@@ -7,6 +7,8 @@ import {
   Shield,
   Users,
   Bell,
+  BellOff,
+  BellRing,
   Download,
   Trash2,
   Lock,
@@ -21,11 +23,13 @@ import {
   GraduationCap,
   BookOpen,
   Key,
+  Zap,
 } from 'lucide-react';
 import { DEFAULT_GMAIL_CONFIG, type GmailSyncConfig } from '../services/gmailSync';
 import { DEFAULT_CLASSROOM_CONFIG, type ClassroomSyncConfig } from '../services/classroomSync';
 import { DEFAULT_GCAL_CONFIG, type GoogleCalendarConfig } from '../services/googleCalendar';
 import useLocalStorage from '../hooks/useLocalStorage';
+import { type NotificationSettings } from '../hooks/useNotifications';
 
 interface SettingsProps {
   family: Family;
@@ -33,6 +37,12 @@ interface SettingsProps {
   onResetData: () => void;
   emailScanConfig: EmailScanConfig;
   onUpdateEmailConfig: (config: Partial<EmailScanConfig>) => void;
+  // Notification props (optional — graceful fallback if not passed)
+  notifPermission?: NotificationPermission;
+  notifSettings?: NotificationSettings;
+  onUpdateNotifSettings?: (patch: Partial<NotificationSettings>) => void;
+  onRequestNotifPermission?: () => Promise<NotificationPermission>;
+  onTestNotification?: () => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({
@@ -41,6 +51,11 @@ const Settings: React.FC<SettingsProps> = ({
   onResetData,
   emailScanConfig,
   onUpdateEmailConfig,
+  notifPermission = 'default',
+  notifSettings,
+  onUpdateNotifSettings,
+  onRequestNotifPermission,
+  onTestNotification,
 }) => {
   const { state, dispatch } = useFamily();
   const isGoogleLinked = state.isGoogleLinked;
@@ -56,6 +71,14 @@ const Settings: React.FC<SettingsProps> = ({
   const [canvasTesting, setCanvasTesting] = useState(false);
   const [canvasUrl, setCanvasUrl] = useState('');
   const [canvasKey, setCanvasKey] = useState('');
+  const [requestingNotif, setRequestingNotif] = useState(false);
+
+  const handleRequestNotifPermission = async () => {
+    if (!onRequestNotifPermission) return;
+    setRequestingNotif(true);
+    await onRequestNotifPermission();
+    setRequestingNotif(false);
+  };
 
   const handleAvatarError = (userId: string) =>
     setAvatarErrors(prev => ({ ...prev, [userId]: true }));
@@ -536,24 +559,71 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
 
         <div className="space-y-6">
+          {/* ── Notifications ────────────────────────────────── */}
           <div className="bg-slate-50 border rounded-2xl p-6">
-            <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <h4 className="font-bold text-slate-900 mb-1 flex items-center gap-2">
               <Bell size={18} className="text-slate-400" />
               Notifications
             </h4>
-            <div className="space-y-4">
-              <label className="flex items-center justify-between cursor-pointer">
-                <span className="text-sm text-slate-700">Daily Morning Briefing</span>
-                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" defaultChecked />
-              </label>
-              <label className="flex items-center justify-between cursor-pointer">
-                <span className="text-sm text-slate-700">Assignment Deadlines</span>
-                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" defaultChecked />
-              </label>
-              <label className="flex items-center justify-between cursor-pointer">
-                <span className="text-sm text-slate-700">Chore Reminders</span>
-                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" defaultChecked />
-              </label>
+            <p className="text-xs text-slate-500 mb-4">
+              Push notifications delivered via this browser / installed PWA.
+            </p>
+
+            {/* Permission status banner */}
+            {notifPermission === 'granted' ? (
+              <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 font-medium">
+                <BellRing size={15} />
+                Notifications enabled
+                <button
+                  onClick={onTestNotification}
+                  className="ml-auto text-xs text-green-600 hover:text-green-800 underline"
+                >
+                  Send test
+                </button>
+              </div>
+            ) : notifPermission === 'denied' ? (
+              <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                <BellOff size={15} />
+                Blocked by browser — allow in browser settings
+              </div>
+            ) : (
+              <button
+                onClick={handleRequestNotifPermission}
+                disabled={requestingNotif}
+                className="w-full mb-4 flex items-center justify-center gap-2 bg-indigo-600 text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+              >
+                <Zap size={15} />
+                {requestingNotif ? 'Requesting…' : 'Enable Push Notifications'}
+              </button>
+            )}
+
+            {/* Per-type toggles */}
+            <div className="space-y-3">
+              {([
+                { key: 'morningBriefing',      label: 'Daily Morning Briefing',  desc: 'Today\'s schedule, overdue items, meal gaps — sent at 7 am' },
+                { key: 'assignmentDeadlines',   label: 'Assignment Deadlines',    desc: 'Alert when an assignment is due today' },
+                { key: 'choreReminders',        label: 'Chore Reminders',         desc: 'Alert when chores are past their due date' },
+                { key: 'mealPlanReminder',      label: 'Meal Plan Gaps',          desc: 'Remind when meals for the week are not fully planned' },
+              ] as { key: keyof NotificationSettings; label: string; desc: string }[]).map(({ key, label, desc }) => (
+                <label key={key} className="flex items-start justify-between gap-3 cursor-pointer group">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 group-hover:text-indigo-700 transition-colors">{label}</p>
+                    <p className="text-xs text-slate-500">{desc}</p>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={notifSettings?.[key] ?? false}
+                    disabled={notifPermission !== 'granted'}
+                    onClick={() => onUpdateNotifSettings?.({ [key]: !(notifSettings?.[key] ?? false) })}
+                    className={`relative shrink-0 w-10 h-5 rounded-full transition-colors mt-0.5
+                      ${notifPermission !== 'granted' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
+                      ${notifSettings?.[key] ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform
+                      ${notifSettings?.[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+              ))}
             </div>
           </div>
 
