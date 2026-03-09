@@ -2,6 +2,18 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { FamilyDocument, DocumentCategory } from '../types';
 import { FolderOpen, Plus, X, AlertTriangle, CheckCircle2, Trash2, Calendar, Search } from 'lucide-react';
+import { useFamily } from '../FamilyContext';
+
+/** Reject non-http(s) URLs to prevent javascript: XSS attacks */
+function sanitizeUrl(url: string): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol) ? url : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 interface DocumentsProps {
   documents: FamilyDocument[];
@@ -34,6 +46,8 @@ function formatDate(dateStr?: string): string {
 }
 
 const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments }) => {
+  const { state } = useFamily();
+  const familyId = (state as any).family?.id ?? 'fam-1';
   const [activeCategory, setActiveCategory] = useState<DocumentCategory | 'All'>('All');
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -56,12 +70,12 @@ const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments }) => {
     if (!form.name) return;
     setDocuments(prev => [{
       id: `d-${Date.now()}`,
-      familyId: 'fam-1',
+      familyId,
       name: form.name,
       category: form.category,
       expiryDate: form.expiryDate || undefined,
       notes: form.notes || undefined,
-      fileUrl: form.fileUrl || undefined,
+      fileUrl: sanitizeUrl(form.fileUrl),
       createdAt: new Date().toISOString().split('T')[0],
     }, ...prev]);
     setAddOpen(false);

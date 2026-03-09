@@ -324,6 +324,8 @@ const FamilyContext = createContext<FamilyContextValue | null>(null);
 
 export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(familyReducer, INITIAL_STATE);
+  // Gate persistence until hydration completes so we never overwrite saved data
+  const [isHydrated, setIsHydrated] = React.useState(false);
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -331,12 +333,13 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (saved) {
       dispatch({ type: 'HYDRATE', payload: saved });
     }
+    setIsHydrated(true);
   }, []);
 
-  // Persist to localStorage on every state change
+  // Persist to localStorage only after hydration so INITIAL_STATE never clobbers saved data
   useEffect(() => {
-    saveToStorage(state);
-  }, [state]);
+    if (isHydrated) saveToStorage(state);
+  }, [state, isHydrated]);
 
   return (
     <FamilyContext.Provider value={{ state, dispatch }}>

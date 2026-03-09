@@ -36,6 +36,17 @@ export function useSpeechInput(options: SpeechInputOptions = {}): SpeechInputRes
   const recognitionRef = useRef<any>(null);
   const accumulatedRef = useRef('');
 
+  // Keep callback refs up-to-date so handlers always call the latest version,
+  // even if the parent re-renders with new function references while listening.
+  const onTranscriptRef = useRef(onTranscript);
+  const onFinalTranscriptRef = useRef(onFinalTranscript);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+    onFinalTranscriptRef.current = onFinalTranscript;
+    onErrorRef.current = onError;
+  }, [onTranscript, onFinalTranscript, onError]);
+
   const isSupported = SpeechRecognition !== null;
 
   // Cleanup on unmount
@@ -75,12 +86,12 @@ export function useSpeechInput(options: SpeechInputOptions = {}): SpeechInputRes
       if (final) {
         accumulatedRef.current += final;
         setTranscript(accumulatedRef.current);
-        onTranscript?.(accumulatedRef.current);
-        onFinalTranscript?.(accumulatedRef.current);
+        onTranscriptRef.current?.(accumulatedRef.current);
+        onFinalTranscriptRef.current?.(accumulatedRef.current);
       } else if (interim) {
         const display = accumulatedRef.current + interim;
         setTranscript(display);
-        onTranscript?.(display);
+        onTranscriptRef.current?.(display);
       }
     };
 
@@ -90,7 +101,7 @@ export function useSpeechInput(options: SpeechInputOptions = {}): SpeechInputRes
         : event.error === 'no-speech'
         ? 'No speech detected.'
         : `Speech recognition error: ${event.error}`;
-      onError?.(errMsg);
+      onErrorRef.current?.(errMsg);
       setIsListening(false);
     };
 
@@ -103,9 +114,10 @@ export function useSpeechInput(options: SpeechInputOptions = {}): SpeechInputRes
       recognition.start();
     } catch {
       setIsListening(false);
-      onError?.('Could not start speech recognition.');
+      onErrorRef.current?.('Could not start speech recognition.');
     }
-  }, [isSupported, isListening, lang, continuous, onTranscript, onFinalTranscript, onError]);
+  // Callbacks intentionally omitted — accessed via refs above to avoid stale closures
+  }, [isSupported, isListening, lang, continuous]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {

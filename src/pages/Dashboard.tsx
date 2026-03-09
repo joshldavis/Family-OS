@@ -23,6 +23,13 @@ interface DashboardProps {
   lastScanAt: string | null;
 }
 
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
   const { state } = useFamily();
   const { user: _user, assignments, chores, events, budgets } = {
@@ -67,7 +74,7 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
     <div className="space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Good morning, {user.name.split(' ')[0]} 👋</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{getGreeting()}, {user.name.split(' ')[0]} 👋</h1>
           <p className="text-slate-500 mt-1">Here is what's happening in your household today.</p>
         </div>
         {(showSchoolwork || showChores || showCalendar) && (

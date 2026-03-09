@@ -33,9 +33,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users, familyName }) => {
       return;
     }
 
-    // Demo auth: find by email, fall back to first user
+    // Demo auth: find by email only — no silent fallback to avoid misleading behaviour
     // TODO: replace with real auth (Supabase) in Phase 3
-    const user = users.find(u => u.email === email) || users[0];
+    const user = users.find(u => u.email === email);
+    if (!user) {
+      setAuthError('No account found with that email address.');
+      return;
+    }
     onLogin(user);
   };
 

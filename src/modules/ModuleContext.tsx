@@ -87,51 +87,60 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const enableModule = useCallback((id: string) => {
     const mod = getModule(id);
     if (!mod) return;
+    // Track whether the module was actually newly enabled so side-effect fires exactly once
+    let shouldFireOnEnable = false;
     setEnabledModulesState(prev => {
-      if (prev.includes(id)) return prev; // already enabled — skip side effect
+      if (prev.includes(id)) return prev; // already enabled — no-op
+      shouldFireOnEnable = true;
       const depsToEnable = (mod.dependencies ?? []).filter(dep => !prev.includes(dep));
-      mod.onEnable?.();
       return Array.from(new Set([...prev, ...depsToEnable, id]));
     });
+    // Side effect lives outside the updater (updaters must be pure)
+    if (shouldFireOnEnable) mod.onEnable?.();
   }, []);
 
   const disableModule = useCallback((id: string) => {
     const mod = getModule(id);
     if (!mod || !mod.canDisable) return; // core modules are immutable
 
-    // Use functional updater to compute dependents from latest state
+    // Track whether the module was actually removed before firing the side effect
+    let wasEnabled = false;
     setEnabledModulesState(prev => {
+      wasEnabled = prev.includes(id);
+      if (!wasEnabled) return prev;
       const dependents = getDependents(id, prev);
       return prev.filter(mid => mid !== id && !dependents.includes(mid));
     });
-    mod.onDisable?.();
+    if (wasEnabled) mod.onDisable?.();
   }, []);
 
   const toggleModule = useCallback((id: string) => {
     const mod = getModule(id);
     if (!mod) return;
 
-    // Capture current enabled state outside the updater to fire side effects after
+    // Determine the action inside the updater (using prev, not stale closure state)
+    // and store it so the side-effect can fire correctly outside the updater.
+    let action: 'enabled' | 'disabled' | 'none' = 'none';
     setEnabledModulesState(prev => {
       const isCurrentlyEnabled = prev.includes(id);
       if (isCurrentlyEnabled) {
         if (!mod.canDisable) return prev;
+        action = 'disabled';
         const dependents = getDependents(id, prev);
         return prev.filter(mid => mid !== id && !dependents.includes(mid));
       } else {
+        action = 'enabled';
         const depsToEnable = (mod.dependencies ?? []).filter(dep => !prev.includes(dep));
         return Array.from(new Set([...prev, ...depsToEnable, id]));
       }
     });
 
-    // Fire side effects outside the updater so they run exactly once
-    // (reading enabledModules here is safe — we only need to know the pre-toggle state)
-    if (enabledModules.includes(id)) {
-      mod.onDisable?.();
-    } else {
-      mod.onEnable?.();
-    }
-  }, [enabledModules]);
+    // Side effects run exactly once, driven by the updater's decision (not stale closure)
+    // Cast needed because TS can't track mutations inside the functional updater callback
+    const resolvedAction = action as 'enabled' | 'disabled' | 'none';
+    if (resolvedAction === 'enabled') mod.onEnable?.();
+    else if (resolvedAction === 'disabled') mod.onDisable?.();
+  }, []);
 
   const setEnabledModules = useCallback((ids: string[]) => {
     // Always keep core modules

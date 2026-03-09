@@ -45,7 +45,7 @@ const Insights: React.FC = () => {
     events.forEach(e => {
       const key = e.start.split('T')[0];
       if (data[key]) {
-        const duration = (new Date(e.end).getTime() - new Date(e.start).getTime()) / 60000;
+        const duration = Math.max(0, (new Date(e.end).getTime() - new Date(e.start).getTime()) / 60000);
         data[key].events += duration;
       }
     });
@@ -116,7 +116,11 @@ Be warm, specific, and practical. Reference actual data points.\n\n${context}` }
       });
 
       const parsed = JSON.parse(result.text || '{}');
-      setAiReport(parsed);
+      setAiReport({
+        observations: Array.isArray(parsed.observations) ? parsed.observations : [],
+        actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems : [],
+        budgetAdvice: typeof parsed.budgetAdvice === 'string' ? parsed.budgetAdvice : 'No budget advice available.',
+      });
       setHasGenerated(true);
     } catch (err) {
       setAiReport({

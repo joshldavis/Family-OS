@@ -86,7 +86,7 @@ export function useNotifications() {
 
   const fireOverdueAlerts = useCallback(
     (ctx: BriefingContext) => {
-      if (Notification.permission !== 'granted') return;
+      if (!isSupported || Notification.permission !== 'granted') return;
 
       if (settings.choreReminders && ctx.overdueChores.length > 0) {
         sendNotification(
@@ -108,7 +108,7 @@ export function useNotifications() {
         );
       }
     },
-    [settings, sendNotification],
+    [isSupported, settings, sendNotification],
   );
 
   // ── Morning briefing ──────────────────────────────────────────────────────

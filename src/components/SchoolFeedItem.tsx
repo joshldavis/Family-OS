@@ -120,7 +120,7 @@ const SchoolFeedItem: React.FC<SchoolFeedItemProps> = ({ item }) => {
               <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">{data.childName}</span>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">{data.from} · {data.date}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{[data.from, data.date].filter(Boolean).join(' · ') || 'Unknown'}</p>
         </div>
         {expanded ? <ChevronUp size={14} className="text-slate-300 flex-shrink-0 mt-1" /> : <ChevronDown size={14} className="text-slate-300 flex-shrink-0 mt-1" />}
       </button>
