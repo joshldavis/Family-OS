@@ -6,7 +6,7 @@ const goals: ModuleDefinition = {
   name: 'Goal Templates',
   description: 'Browse preset goal templates and track shared family progress.',
   icon: 'ListTodo',
-  category: 'productivity',
+  category: 'wellness',
   defaultEnabled: true,
   canDisable: true,
   dependencies: [],

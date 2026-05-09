@@ -5,7 +5,7 @@ const health: ModuleDefinition = {
   name: 'Family Health',
   description: 'Track appointments, medications, and vitals for every family member.',
   icon: 'HeartPulse',
-  category: 'productivity',
+  category: 'wellness',
   defaultEnabled: true,
   canDisable: true,
   dependencies: [],

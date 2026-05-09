@@ -118,25 +118,16 @@ const ModuleSettings: React.FC = () => {
               <p className="text-xs text-slate-500 mt-0.5">{meta.description}</p>
             </div>
 
-            {cat === 'wellness' ? (
-              <div className="bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                <p className="text-sm text-slate-400 font-medium">Coming soon</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  Health tracker, habits, and family goals are on the roadmap.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {mods.map(mod => (
-                  <ModuleCard
-                    key={mod.id}
-                    mod={mod}
-                    enabled={isEnabled(mod.id)}
-                    onToggle={() => handleToggle(mod)}
-                  />
-                ))}
-              </div>
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {mods.map(mod => (
+                <ModuleCard
+                  key={mod.id}
+                  mod={mod}
+                  enabled={isEnabled(mod.id)}
+                  onToggle={() => handleToggle(mod)}
+                />
+              ))}
+            </div>
           </div>
         );
       })}

@@ -6,7 +6,7 @@ const wellness: ModuleDefinition = {
   name: 'Wellness',
   description: 'Track family habits, shared goals, and daily health logs.',
   icon: 'Heart',
-  category: 'productivity',
+  category: 'wellness',
   defaultEnabled: true,
   canDisable: true,
   dependencies: [],
