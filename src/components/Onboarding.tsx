@@ -1,7 +1,29 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowRight } from 'lucide-react';
+import { Send, ArrowRight, Zap } from 'lucide-react';
 import { OnboardingData } from '../types';
+
+// ─── Demo data — one click to skip setup ─────────────────────────────────────
+const DEMO_DATA: OnboardingData = {
+  status: 'complete',
+  readyToLaunch: true,
+  parent: { name: 'Josh', email: '' },
+  additionalAdults: [{ name: 'Sarah', relationship: 'spouse' }],
+  familyName: 'Davis',
+  children: [
+    { name: 'Emma',  age: 12, grade: '7th Grade', school: 'Riverside Middle School' },
+    { name: 'Liam',  age: 9,  grade: '4th Grade', school: 'Lincoln Elementary'      },
+  ],
+  priorities: ['schoolwork', 'chores', 'calendar', 'finances'],
+  painPoints: 'Keeping everyone on the same page',
+  emailConfig: {
+    enabled: false,
+    schoolDomains: [],
+    includeClassDojo: false,
+    includeGoogleClassroom: false,
+    knownSenders: [],
+  },
+};
 
 interface OnboardingProps {
   onComplete: (data: OnboardingData) => void;
@@ -301,6 +323,17 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               </div>
               <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Family OS</h2>
               <p className="text-slate-500 text-sm max-w-xs">Setting up your family workspace in a few easy steps…</p>
+
+              {/* Demo shortcut */}
+              <button
+                onClick={() => onComplete(DEMO_DATA)}
+                className="mt-8 flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-white text-sm shadow-lg transition-all hover:scale-105 active:scale-95"
+                style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
+              >
+                <Zap size={16} />
+                Try Demo — skip setup
+              </button>
+              <p className="text-slate-400 text-xs mt-2">See the full app instantly with sample family data</p>
             </div>
           )}
 
@@ -375,9 +408,21 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
       {/* ── Fixed Input Bar ── */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-20 px-4 py-4"
+        className="fixed bottom-0 left-0 right-0 z-20 px-4 pt-3 pb-4"
         style={{ background: 'rgba(247,246,243,0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid #e8e6e0' }}
       >
+        {/* Skip link — only show once chat has started */}
+        {messages.length > 0 && (
+          <div className="max-w-2xl mx-auto mb-2 flex justify-center">
+            <button
+              onClick={() => onComplete(DEMO_DATA)}
+              className="text-xs text-slate-400 hover:text-indigo-500 transition-colors flex items-center gap-1"
+            >
+              <Zap size={11} />
+              Skip setup — try demo instead
+            </button>
+          </div>
+        )}
         <div className="max-w-2xl mx-auto flex items-center gap-3">
           <input
             ref={inputRef}
