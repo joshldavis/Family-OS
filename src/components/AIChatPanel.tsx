@@ -251,13 +251,16 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
     setIsOpen(true);
     setVoiceError(null);
     stopSpeaking();
-    // Explicitly request mic permission — this triggers the native browser prompt
+    // Explicitly call getUserMedia to trigger the native browser permission prompt.
+    // Keep the stream alive briefly so the browser doesn't revoke access before
+    // SpeechRecognition can grab the mic.
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => t.stop()); // release the stream; SpeechRecognition handles its own
-      setTimeout(() => startListening(), 100);
+      startListening();
+      // Stop the getUserMedia stream after recognition has had time to start
+      setTimeout(() => stream.getTracks().forEach(t => t.stop()), 1500);
     } catch {
-      setVoiceError('Microphone access is blocked. On Mac: System Settings → Privacy & Security → Microphone → enable your browser. Then try again.');
+      setVoiceError('Microphone access is blocked. On Mac: System Settings → Privacy & Security → Microphone → enable your browser, then refresh and try again.');
     }
   }, [startListening, stopSpeaking]);
 
