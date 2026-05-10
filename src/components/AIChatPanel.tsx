@@ -259,42 +259,15 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
 
   return (
     <>
-      {/* ── Single unified FAB pill ──────────────────────────────────────── */}
+      {/* ── Single FAB — one tap to talk ────────────────────────────────── */}
       {showFAB && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center bg-indigo-600 hover:bg-indigo-700 rounded-full shadow-xl shadow-indigo-300/40 transition-all hover:scale-105 overflow-hidden">
-          {speechSupported && (
-            <>
-              <button
-                onClick={enterVoiceMode}
-                aria-label="Voice assistant"
-                title="Talk to AI"
-                className="flex items-center gap-2 px-4 py-3 text-white hover:bg-white/10 transition-colors"
-              >
-                <Mic size={18} />
-                <span className="text-sm font-semibold">Ask AI</span>
-              </button>
-              <div className="w-px h-5 bg-indigo-500/60" />
-              <button
-                onClick={() => { setIsOpen(true); setVoiceMode(false); }}
-                aria-label="Text chat"
-                title="Open text chat"
-                className="px-3 py-3 text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <Sparkles size={16} />
-              </button>
-            </>
-          )}
-          {!speechSupported && (
-            <button
-              onClick={() => { setIsOpen(true); setVoiceMode(false); }}
-              aria-label="Open AI Assistant"
-              className="flex items-center gap-2 px-4 py-3 text-white"
-            >
-              <Sparkles size={18} />
-              <span className="text-sm font-semibold">Ask AI</span>
-            </button>
-          )}
-        </div>
+        <button
+          onClick={speechSupported ? enterVoiceMode : () => { setIsOpen(true); setVoiceMode(false); }}
+          aria-label="Talk to AI"
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-xl shadow-indigo-300/40 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+        >
+          {speechSupported ? <Mic size={22} /> : <Sparkles size={22} />}
+        </button>
       )}
 
       {/* ── Slide-in Panel ───────────────────────────────────────────────── */}
