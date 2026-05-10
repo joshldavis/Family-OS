@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ActionItem, Status } from '../types';
+import { ActionItem, Chore, Frequency, Status } from '../types';
 import { useFamily } from '../FamilyContext';
 import { useModules } from '../modules/ModuleContext';
 import {
@@ -22,6 +22,31 @@ import FamilyBriefing from '../components/FamilyBriefing';
 interface DashboardProps {
   actionItems: ActionItem[];
   lastScanAt: string | null;
+}
+
+/** Returns true if a chore is scheduled to occur on the given date, based on its frequency. */
+function isChoreScheduledOn(chore: Chore, dateStr: string): boolean {
+  const target = new Date(dateStr + 'T12:00:00');
+  const due    = new Date(chore.dueDate + 'T12:00:00');
+  if (due > target) return false; // not yet started
+
+  switch (chore.frequency) {
+    case Frequency.DAILY:
+      return true;
+    case Frequency.WEEKLY: {
+      const days = Math.round((target.getTime() - due.getTime()) / 86400000);
+      return days % 7 === 0;
+    }
+    case Frequency.BIWEEKLY: {
+      const days = Math.round((target.getTime() - due.getTime()) / 86400000);
+      return days % 14 === 0;
+    }
+    case Frequency.MONTHLY:
+      return due.getDate() === target.getDate();
+    case Frequency.ONE_TIME:
+    default:
+      return chore.dueDate === dateStr;
+  }
 }
 
 function getGreeting(): string {
@@ -52,12 +77,23 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  const todayAssignments       = showSchoolwork ? assignments.filter(a => a.dueDate === todayStr) : [];
-  const todayChores            = showChores     ? chores.filter(c => c.dueDate === todayStr)       : [];
-  const pendingAssignments     = todayAssignments.filter(a => a.status !== Status.DONE);
-  const completedAssignments   = todayAssignments.filter(a => a.status === Status.DONE);
-  const pendingChores          = todayChores.filter(c => c.status !== Status.DONE);
-  const completedChores        = todayChores.filter(c => c.status === Status.DONE);
+  // Helper: was this chore completed today (local date)?
+  const completedToday = (c: Chore) => {
+    if (c.status !== Status.DONE || !c.completedAt) return false;
+    const d = new Date(c.completedAt);
+    const local = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return local === todayStr;
+  };
+
+  const todayAssignments     = showSchoolwork ? assignments.filter(a => a.dueDate === todayStr) : [];
+  // Show a chore if it's scheduled today AND (still pending OR just completed today)
+  const todayChores          = showChores
+    ? chores.filter(c => isChoreScheduledOn(c, todayStr) && (c.status !== Status.DONE || completedToday(c)))
+    : [];
+  const pendingAssignments   = todayAssignments.filter(a => a.status !== Status.DONE);
+  const completedAssignments = todayAssignments.filter(a => a.status === Status.DONE);
+  const pendingChores        = todayChores.filter(c => c.status !== Status.DONE);
+  const completedChores      = todayChores.filter(c => completedToday(c));
   const todayEvents      = showCalendar   ? events.filter(e => e.start.startsWith(todayStr)) : [];
 
   const overdueAssignments = showSchoolwork ? assignments.filter(a => a.dueDate < todayStr && a.status !== Status.DONE) : [];

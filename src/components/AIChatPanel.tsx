@@ -124,13 +124,19 @@ const VoiceOverlay: React.FC<VoiceOverlayProps> = ({
           </div>
         )}
         {error && (
-          <div className="bg-red-500/20 border border-red-500/30 rounded-2xl p-4 text-center">
+          <div className="bg-red-500/20 border border-red-500/30 rounded-2xl p-4 text-center space-y-3">
             <p className="text-red-300 text-sm leading-relaxed">{error}</p>
+            {error.includes('denied') || error.includes('permission') ? (
+              <p className="text-white/50 text-xs leading-relaxed">
+                To fix: click the 🔒 or camera icon in your browser's address bar → find Microphone → set to Allow → refresh the page.
+              </p>
+            ) : null}
             <button
               onClick={onSwitchToChat}
-              className="mt-3 text-xs font-semibold text-white/70 hover:text-white underline"
+              className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors"
             >
-              Switch to text chat instead
+              <Send size={12} />
+              Use text chat instead
             </button>
           </div>
         )}
