@@ -1,7 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { Sparkles, X, Send, Loader2, Bot, User as UserIcon, Lightbulb, Mic, MicOff } from 'lucide-react';
+import { Sparkles, X, Send, Loader2, Bot, User as UserIcon, Lightbulb, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { useSpeechInput } from '../hooks/useSpeechInput';
 
 interface ChatMessage {
@@ -21,28 +21,166 @@ const QUICK_PROMPTS = [
   { label: '💰 Budget check', prompt: 'Review our family budget and spending trends and give me a brief financial health summary.' },
 ];
 
-const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+// Strip markdown symbols so TTS doesn't read "asterisk asterisk" etc.
+function stripForSpeech(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')   // bold
+    .replace(/\*(.+?)\*/g, '$1')        // italic
+    .replace(/`(.+?)`/g, '$1')          // inline code
+    .replace(/#{1,6}\s/g, '')           // headings
+    .replace(/\n{2,}/g, '. ')           // double newlines → pause
+    .replace(/\n/g, ' ')                // single newlines
+    .replace(/[*_~`>]/g, '')            // remaining symbols
+    .trim();
+}
 
+// ── Voice Mode Overlay ────────────────────────────────────────────────────────
+
+interface VoiceOverlayProps {
+  status: 'idle' | 'listening' | 'thinking' | 'speaking';
+  transcript: string;
+  lastResponse: string;
+  onStop: () => void;
+  onClose: () => void;
+}
+
+const VoiceOverlay: React.FC<VoiceOverlayProps> = ({ status, transcript, lastResponse, onStop, onClose }) => {
+  const statusText = {
+    idle:      'Tap the mic to speak',
+    listening: 'Listening…',
+    thinking:  'Thinking…',
+    speaking:  'Speaking…',
+  }[status];
+
+  const pulseClass = status === 'listening'
+    ? 'bg-red-500 shadow-red-300 animate-pulse'
+    : status === 'speaking'
+    ? 'bg-indigo-500 shadow-indigo-300 animate-pulse'
+    : status === 'thinking'
+    ? 'bg-amber-400 shadow-amber-200'
+    : 'bg-indigo-600 shadow-indigo-200';
+
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-between bg-slate-900/95 backdrop-blur-md rounded-none p-8">
+      {/* Close */}
+      <div className="w-full flex justify-between items-center">
+        <div className="flex items-center gap-2 text-white/70 text-sm font-medium">
+          <Sparkles size={16} className="text-indigo-400" />
+          Family AI — Voice Mode
+        </div>
+        <button onClick={onClose} className="text-white/50 hover:text-white transition-colors">
+          <X size={22} />
+        </button>
+      </div>
+
+      {/* Big mic orb */}
+      <div className="flex flex-col items-center gap-6">
+        <button
+          onClick={status === 'listening' ? onStop : undefined}
+          className={`w-28 h-28 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 ${pulseClass}`}
+        >
+          {status === 'thinking' ? (
+            <Loader2 size={40} className="text-white animate-spin" />
+          ) : status === 'speaking' ? (
+            <Volume2 size={40} className="text-white" />
+          ) : (
+            <Mic size={40} className="text-white" />
+          )}
+        </button>
+        <p className="text-white/70 text-sm font-medium tracking-wide">{statusText}</p>
+      </div>
+
+      {/* Transcript / response */}
+      <div className="w-full space-y-3 max-h-52 overflow-y-auto">
+        {transcript && (
+          <div className="bg-white/10 rounded-2xl p-4">
+            <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1 font-bold">You said</p>
+            <p className="text-white text-sm leading-relaxed">{transcript}</p>
+          </div>
+        )}
+        {lastResponse && (
+          <div className="bg-indigo-500/20 border border-indigo-400/20 rounded-2xl p-4">
+            <p className="text-[10px] text-indigo-300/70 uppercase tracking-widest mb-1 font-bold">Assistant</p>
+            <p className="text-white/90 text-sm leading-relaxed">{lastResponse}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
+  const [isOpen, setIsOpen]       = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [messages, setMessages]   = useState<ChatMessage[]>([]);
+  const [input, setInput]         = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [lastResponse, setLastResponse] = useState('');
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef       = useRef<HTMLInputElement>(null);
+  const synthRef       = useRef<SpeechSynthesisUtterance | null>(null);
+  const voiceModeRef   = useRef(voiceMode); // stable ref so TTS onend callback sees current value
+  useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
+
+  // ── Text-to-speech ─────────────────────────────────────────────────────
+  const speakText = useCallback((text: string, onDone?: () => void) => {
+    if (!window.speechSynthesis) { onDone?.(); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(stripForSpeech(text));
+    utterance.rate  = 1.05;
+    utterance.pitch = 1.0;
+    // Pick a natural-sounding voice when available
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v =>
+      v.lang.startsWith('en') && (v.name.includes('Samantha') || v.name.includes('Google') || v.name.includes('Natural'))
+    ) ?? voices.find(v => v.lang.startsWith('en'));
+    if (preferred) utterance.voice = preferred;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend   = () => { setIsSpeaking(false); onDone?.(); };
+    utterance.onerror = () => { setIsSpeaking(false); onDone?.(); };
+    synthRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  const stopSpeaking = useCallback(() => {
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
+  }, []);
+
+  // ── Speech input ────────────────────────────────────────────────────────
   const { isListening, isSupported: speechSupported, startListening, stopListening } = useSpeechInput({
-    onFinalTranscript: (text) => setInput(text),
-    onTranscript: (text) => setInput(text),
+    onTranscript:      (text) => { setInput(text); if (voiceModeRef.current) setVoiceTranscript(text); },
+    onFinalTranscript: (text) => {
+      setInput(text);
+      if (voiceModeRef.current) {
+        setVoiceTranscript(text);
+        // Auto-send in voice mode after a short settle delay
+        setTimeout(() => sendMessage(text, true), 300);
+      }
+    },
   });
 
+  // ── Scroll to bottom ────────────────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    if (isOpen) inputRef.current?.focus();
-  }, [isOpen]);
+    if (isOpen && !voiceMode) inputRef.current?.focus();
+  }, [isOpen, voiceMode]);
 
-  const sendMessage = async (text: string) => {
+  // Stop TTS when panel closes
+  useEffect(() => {
+    if (!isOpen) { stopSpeaking(); stopListening(); }
+  }, [isOpen, stopSpeaking, stopListening]);
+
+  // ── Send message ────────────────────────────────────────────────────────
+  const sendMessage = useCallback(async (text: string, fromVoice = false) => {
     if (!text.trim() || isLoading) return;
 
     const userMsg: ChatMessage = {
@@ -53,25 +191,23 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
 
     setMessages(prev => [...prev, userMsg]);
     setInput('');
+    if (fromVoice) setVoiceTranscript('');
     setIsLoading(true);
 
     try {
       const apiKey = import.meta.env.VITE_API_KEY || '';
-      if (!apiKey) {
-        throw new Error('No API key configured');
-      }
+      if (!apiKey) throw new Error('No API key configured');
 
       const ai = new GoogleGenAI({ apiKey });
 
-      const conversationHistory = messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }],
-      }));
-
-      conversationHistory.push({
-        role: 'user',
-        parts: [{ text: text.trim() }],
-      });
+      // Build history including the new user message
+      const conversationHistory = [
+        ...messages.map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          parts: [{ text: m.content }],
+        })),
+        { role: 'user', parts: [{ text: text.trim() }] },
+      ];
 
       const result = await ai.models.generateContent({
         model: 'gemini-1.5-flash',
@@ -81,36 +217,79 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
         },
       });
 
+      const responseText = result.text || 'Sorry, I couldn\'t generate a response.';
       const assistantMsg: ChatMessage = {
         id: `msg-${Date.now()}-ai`,
         role: 'assistant',
-        content: result.text || 'Sorry, I couldn\'t generate a response.',
+        content: responseText,
       };
+
       setMessages(prev => [...prev, assistantMsg]);
-    } catch (err) {
-      const errorMsg: ChatMessage = {
+      setLastResponse(responseText);
+
+      // Speak in voice mode — then auto-listen again
+      if (fromVoice || voiceModeRef.current) {
+        speakText(responseText, () => {
+          if (voiceModeRef.current) startListening();
+        });
+      }
+    } catch {
+      const errText = '⚠️ Unable to connect to AI. Please check your Gemini API key.';
+      setMessages(prev => [...prev, {
         id: `msg-${Date.now()}-err`,
         role: 'assistant',
-        content: '⚠️ Unable to connect to AI. Please check that your Gemini API key is set in the `.env` file as `VITE_API_KEY`.',
-      };
-      setMessages(prev => [...prev, errorMsg]);
+        content: errText,
+      }]);
+      if (voiceModeRef.current) speakText(errText);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isLoading, messages, familyContext, speakText, startListening]);
+
+  // ── Voice mode controls ─────────────────────────────────────────────────
+  const enterVoiceMode = useCallback(() => {
+    setVoiceMode(true);
+    setIsOpen(true);
+    stopSpeaking();
+    setTimeout(() => startListening(), 200); // slight delay for state settle
+  }, [startListening, stopSpeaking]);
+
+  const exitVoiceMode = useCallback(() => {
+    setVoiceMode(false);
+    stopListening();
+    stopSpeaking();
+    setVoiceTranscript('');
+  }, [stopListening, stopSpeaking]);
+
+  const voiceStatus: 'idle' | 'listening' | 'thinking' | 'speaking' =
+    isSpeaking ? 'speaking' : isLoading ? 'thinking' : isListening ? 'listening' : 'idle';
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(input);
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
   };
 
   return (
     <>
-      {/* Floating Button */}
+      {/* ── Floating buttons ─────────────────────────────────────────────── */}
+
+      {/* Voice button */}
+      {speechSupported && (
+        <button
+          onClick={enterVoiceMode}
+          aria-label="Voice assistant"
+          className={`fixed bottom-24 right-6 z-50 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 ${
+            voiceMode && isListening
+              ? 'bg-red-500 shadow-red-200 animate-pulse'
+              : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600 shadow-slate-100'
+          }`}
+        >
+          <Mic size={20} />
+        </button>
+      )}
+
+      {/* Chat button */}
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => { setIsOpen(true); setVoiceMode(false); }}
         aria-label="Open AI Assistant"
         aria-expanded={isOpen}
         className={`fixed bottom-6 right-6 z-50 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg shadow-indigo-200 flex items-center justify-center transition-all hover:scale-110 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}
@@ -118,11 +297,23 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
         <Sparkles size={24} />
       </button>
 
-      {/* Slide-in Panel */}
+      {/* ── Slide-in Panel ───────────────────────────────────────────────── */}
       <div className={`fixed inset-y-0 right-0 z-[120] w-full max-w-md transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <div className="h-full bg-white border-l shadow-2xl flex flex-col">
+        <div className="h-full bg-white border-l shadow-2xl flex flex-col relative overflow-hidden">
+
+          {/* Voice mode overlay — sits on top of everything when active */}
+          {voiceMode && (
+            <VoiceOverlay
+              status={voiceStatus}
+              transcript={voiceTranscript}
+              lastResponse={lastResponse}
+              onStop={stopListening}
+              onClose={() => { exitVoiceMode(); setIsOpen(false); }}
+            />
+          )}
+
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b bg-indigo-50/50">
+          <div className="flex items-center justify-between p-4 border-b bg-indigo-50/50 flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
                 <Sparkles size={18} />
@@ -132,13 +323,39 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
                 <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Powered by Gemini</p>
               </div>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              aria-label="Close AI Assistant"
-              className="p-2 hover:bg-slate-200 rounded-full transition-colors"
-            >
-              <X size={18} className="text-slate-500" />
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Voice mode toggle */}
+              {speechSupported && (
+                <button
+                  onClick={voiceMode ? exitVoiceMode : enterVoiceMode}
+                  title={voiceMode ? 'Exit voice mode' : 'Switch to voice mode'}
+                  className={`p-2 rounded-full transition-colors ${
+                    voiceMode
+                      ? 'bg-red-100 text-red-500 hover:bg-red-200'
+                      : 'hover:bg-slate-200 text-slate-500 hover:text-indigo-600'
+                  }`}
+                >
+                  {voiceMode ? <MicOff size={16} /> : <Mic size={16} />}
+                </button>
+              )}
+              {/* TTS toggle (mute AI voice) */}
+              {isSpeaking && (
+                <button
+                  onClick={stopSpeaking}
+                  title="Stop speaking"
+                  className="p-2 hover:bg-slate-200 rounded-full transition-colors text-indigo-500"
+                >
+                  <VolumeX size={16} />
+                </button>
+              )}
+              <button
+                onClick={() => { setIsOpen(false); exitVoiceMode(); }}
+                aria-label="Close AI Assistant"
+                className="p-2 hover:bg-slate-200 rounded-full transition-colors"
+              >
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
           </div>
 
           {/* Messages */}
@@ -149,10 +366,18 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
                   <Bot size={32} className="text-indigo-400" />
                 </div>
                 <h4 className="font-bold text-slate-900 mb-1">Hi there! 👋</h4>
-                <p className="text-sm text-slate-500 mb-6">
-                  I'm your Family OS assistant. I can help with planning, meal ideas, budgeting, and more.
+                <p className="text-sm text-slate-500 mb-2">
+                  Ask me anything about your family's schedule, meals, budget, and more.
                 </p>
-
+                {speechSupported && (
+                  <button
+                    onClick={enterVoiceMode}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-indigo-700 transition-colors mb-6 shadow-md shadow-indigo-200"
+                  >
+                    <Mic size={16} />
+                    Talk to me
+                  </button>
+                )}
                 <div className="w-full space-y-2">
                   <div className="flex items-center gap-2 text-xs text-slate-400 font-medium uppercase tracking-wider mb-2">
                     <Lightbulb size={12} />
@@ -171,23 +396,28 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
               </div>
             ) : (
               messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
+                <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'assistant' && (
                     <div className="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
                       <Bot size={14} className="text-indigo-600" />
                     </div>
                   )}
-                  <div
-                    className={`max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                      msg.role === 'user'
-                        ? 'bg-indigo-600 text-white rounded-br-md'
-                        : 'bg-slate-100 text-slate-800 rounded-bl-md'
-                    }`}
-                  >
+                  <div className={`max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                    msg.role === 'user'
+                      ? 'bg-indigo-600 text-white rounded-br-md'
+                      : 'bg-slate-100 text-slate-800 rounded-bl-md'
+                  }`}>
                     {msg.content}
+                    {/* Re-read button on assistant messages */}
+                    {msg.role === 'assistant' && speechSupported && (
+                      <button
+                        onClick={() => speakText(msg.content)}
+                        title="Read aloud"
+                        className="ml-2 inline-flex items-center opacity-40 hover:opacity-80 transition-opacity"
+                      >
+                        <Volume2 size={12} />
+                      </button>
+                    )}
                   </div>
                   {msg.role === 'user' && (
                     <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
@@ -210,9 +440,9 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
-          <div className="p-4 border-t bg-white">
-            {isListening && (
+          {/* Text input bar */}
+          <div className="p-4 border-t bg-white flex-shrink-0">
+            {isListening && !voiceMode && (
               <div className="mb-2 flex items-center gap-2 text-xs text-red-500 font-semibold animate-pulse">
                 <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
                 Listening… speak now
@@ -258,7 +488,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
       {isOpen && (
         <div
           className="fixed inset-0 z-[115] bg-black/20 backdrop-blur-sm md:hidden"
-          onClick={() => setIsOpen(false)}
+          onClick={() => { setIsOpen(false); exitVoiceMode(); }}
         />
       )}
     </>
