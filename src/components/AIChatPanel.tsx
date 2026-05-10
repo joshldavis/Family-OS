@@ -77,7 +77,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
         model: 'gemini-1.5-flash',
         contents: conversationHistory,
         config: {
-          systemInstruction: `You are a helpful family assistant for the Miller Family inside "Family OS" — a family management app. Be warm, concise, and practical. Use emoji occasionally. Keep responses short (2-4 paragraphs max). Here is the current family context data:\n\n${familyContext}`,
+          systemInstruction: `You are a helpful family assistant inside "Family OS" — a family management app. Be warm, concise, and practical. Use emoji occasionally. Keep responses short (2-4 paragraphs max). Here is the current family context data:\n\n${familyContext}`,
         },
       });
 

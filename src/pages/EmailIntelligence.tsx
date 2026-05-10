@@ -26,7 +26,6 @@ import {
 } from '../types';
 import { classifySingleEmail, FamilyContext, parseEmailSource } from '../services/emailClassifier';
 import { routeClassifiedEmails } from '../services/emailRouter';
-import { scanFromPastedText } from '../services/emailScanner';
 import ActionItemCard from '../components/ActionItemCard';
 import SchoolFeedItem, { FeedItem } from '../components/SchoolFeedItem';
 import EmailScanModal from '../components/EmailScanModal';
@@ -79,8 +78,8 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
 
   const pendingActions = actionItems.filter(a => a.status === 'pending')
     .sort((a, b) => {
-      const urgencyOrder = { high: 0, medium: 1, low: 2 };
-      return urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
+      const urgencyOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
+      return (urgencyOrder[a.urgency ?? 'low'] ?? 2) - (urgencyOrder[b.urgency ?? 'low'] ?? 2);
     });
 
   const allFeedItems: FeedItem[] = [
@@ -285,8 +284,8 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
               </div>
             ) : (
               <div className="space-y-2">
-                {allFeedItems.map((item, i) => (
-                  <SchoolFeedItem key={i} item={item} />
+                {allFeedItems.map((item) => (
+                  <SchoolFeedItem key={(item.data as any).id ?? (item.data as any).createdAt} item={item} />
                 ))}
               </div>
             )}

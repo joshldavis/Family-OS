@@ -32,11 +32,15 @@ const Allowance: React.FC<AllowanceProps> = ({
       rewardTransactions.filter(t => t.userId === userId && t.type === 'earned').map(t => t.date)
     )].sort().reverse();
     if (!earnedDates.length) return 0;
+    // Streak only counts if the most recent earned date is today or yesterday
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    if (earnedDates[0] !== today && earnedDates[0] !== yesterday) return 0;
     let streak = 1;
     for (let i = 0; i < earnedDates.length - 1; i++) {
-      const a = new Date(earnedDates[i]);
-      const b = new Date(earnedDates[i + 1]);
-      const diff = (a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24);
+      const a = new Date(earnedDates[i] + 'T12:00:00');
+      const b = new Date(earnedDates[i + 1] + 'T12:00:00');
+      const diff = Math.round((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
       if (diff === 1) streak++;
       else break;
     }

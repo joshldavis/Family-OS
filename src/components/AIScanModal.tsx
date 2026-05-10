@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { X, Sparkles, Upload, FileText, Loader2, Check, AlertCircle } from 'lucide-react';
+import { X, Sparkles, Upload, FileText, Loader2, AlertCircle } from 'lucide-react';
 
 interface AIScanModalProps {
   isOpen: boolean;

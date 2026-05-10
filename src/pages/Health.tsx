@@ -298,7 +298,7 @@ const Health: React.FC<HealthProps> = ({ users: propUsers }) => {
                       <div className={`px-2 py-0.5 rounded text-xs font-bold ${APPT_COLORS[appt.type]}`}>{appt.type}</div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-slate-700 text-sm">{appt.title}</p>
-                        <p className="text-xs text-slate-400">{member?.name} · {appt.date}</p>
+                        <p className="text-xs text-slate-400">{member?.name ?? 'Unknown'} · {appt.date}</p>
                       </div>
                       <button onClick={() => deleteAppt(appt.id)} className="text-slate-200 hover:text-red-400 transition-colors">
                         <Trash2 size={13} />
@@ -354,7 +354,7 @@ const Health: React.FC<HealthProps> = ({ users: propUsers }) => {
                       </button>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span className="flex items-center gap-1"><UserIcon size={11} /> {member?.name}</span>
+                      <span className="flex items-center gap-1"><UserIcon size={11} /> {member?.name ?? 'Unknown'}</span>
                       {med.instructions && <span>· {med.instructions}</span>}
                     </div>
                     {needsRefill && (

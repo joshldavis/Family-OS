@@ -161,6 +161,7 @@ const Schoolwork: React.FC = () => {
   };
 
   const handleAIScanResult = (extractedList: any[]) => {
+    if (students.length === 0) return;
     const now = new Date().toISOString();
     extractedList.forEach((item, idx) => {
       const matchedStudent = students.find(s =>

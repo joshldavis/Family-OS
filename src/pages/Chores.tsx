@@ -72,6 +72,7 @@ const Chores: React.FC<ChoresProps> = ({ users }) => {
   };
 
   const handleAIScanResult = (extractedList: any[]) => {
+    if (users.length === 0) return;
     const now = new Date().toISOString();
     extractedList.forEach((item, idx) => {
       const matchedUser = users.find(u =>

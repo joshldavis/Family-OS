@@ -228,8 +228,9 @@ const Goals: React.FC<GoalsProps> = ({ users, currentUser, setRewardTransactions
     setActiveGoals(prev => prev.map(g => {
       if (g.id !== goalId) return g;
       const total = g.contributions.reduce((s, c) => s + c.amount, 0);
+      if (delta <= 0) return g;
       const clamped = Math.max(0, Math.min(g.targetValue - total, delta));
-      if (clamped === 0 && delta > 0) return g;
+      if (clamped === 0) return g;
       const contribution: GoalContribution = { userId: currentUser.id, amount: clamped, loggedAt: now() };
       const newTotal = total + clamped;
       const justCompleted = newTotal >= g.targetValue && !awardedRef.current.has(g.id);

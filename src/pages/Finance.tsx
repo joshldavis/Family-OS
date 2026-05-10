@@ -193,7 +193,7 @@ const Finance: React.FC = () => {
       {activeTab === 'budget' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {budgets.map(budget => {
-            const progress = (budget.spent / budget.limit) * 100;
+            const progress = budget.limit > 0 ? (budget.spent / budget.limit) * 100 : 0;
             const isDanger = progress > 90;
             return (
               <div key={budget.id} className="bg-white border rounded-2xl p-6 notion-shadow">
@@ -264,7 +264,7 @@ const Finance: React.FC = () => {
       {activeTab === 'savings' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {savings.map(goal => {
-            const progress = (goal.currentAmount / goal.targetAmount) * 100;
+            const progress = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
             return (
               <div key={goal.id} className="bg-white border rounded-2xl p-8 notion-shadow relative overflow-hidden group">
                 <div className="relative z-10">

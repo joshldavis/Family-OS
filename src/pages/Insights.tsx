@@ -37,7 +37,7 @@ const Insights: React.FC = () => {
     }
 
     assignments.forEach(a => {
-      if (data[a.dueDate]) data[a.dueDate].school += a.estimatedMinutes;
+      if (data[a.dueDate]) data[a.dueDate].school += a.estimatedMinutes ?? 0;
     });
     chores.forEach(c => {
       if (data[c.dueDate]) data[c.dueDate].chores += 15;
@@ -58,6 +58,7 @@ const Insights: React.FC = () => {
   }, [assignments, chores, events]);
 
   const busiestDay = useMemo(() => {
+    if (workloadByDay.length === 0) return { name: '—', total: 0, school: 0, chores: 0, events: 0 };
     return workloadByDay.reduce((prev, current) => (prev.total > current.total) ? prev : current);
   }, [workloadByDay]);
 

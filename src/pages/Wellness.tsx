@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Heart, Plus, Flame, Target, Trash2, CheckCircle2, Circle,
   Dumbbell, Moon, Droplets, ChevronUp, ChevronDown, Activity,
@@ -422,6 +422,18 @@ const HealthSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     sleepHours:      todayEntry?.sleepHours      ?? 0,
     waterGlasses:    todayEntry?.waterGlasses    ?? 0,
   });
+
+  // Sync form when log loads from localStorage or currentUser changes
+  useEffect(() => {
+    const entry = log.find(e => e.userId === currentUser.id && e.date === todayStr);
+    if (entry) {
+      setForm({
+        exerciseMinutes: entry.exerciseMinutes,
+        sleepHours:      entry.sleepHours,
+        waterGlasses:    entry.waterGlasses,
+      });
+    }
+  }, [currentUser.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveToday = () => {
     setLog(prev => {

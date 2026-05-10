@@ -67,13 +67,11 @@ const ShoppingLists: React.FC<ShoppingListsProps> = ({ shoppingLists, setShoppin
   };
 
   const deleteList = (id: string) => {
-    setShoppingLists(prev => {
-      const remaining = prev.filter(l => l.id !== id);
-      if (activeListId === id) {
-        setActiveListId(remaining.length > 0 ? remaining[0].id : null);
-      }
-      return remaining;
-    });
+    const remaining = shoppingLists.filter(l => l.id !== id);
+    setShoppingLists(remaining);
+    if (activeListId === id) {
+      setActiveListId(remaining.length > 0 ? remaining[0].id : null);
+    }
   };
 
   const toggleItem = (itemId: string) => {
