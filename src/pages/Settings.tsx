@@ -456,6 +456,64 @@ const Settings: React.FC<SettingsProps> = ({
             </div>
           </section>
 
+          {/* AI Configuration */}
+          <section className="bg-white border rounded-2xl notion-shadow overflow-hidden">
+            <div className="p-6 border-b bg-slate-50/50">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                <Zap size={18} className="text-violet-500" />
+                AI Configuration
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Family OS uses two AI providers. Configure both keys in your <code className="bg-slate-100 px-1 rounded text-[10px]">.env</code> file for full feature coverage.
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Claude */}
+              {(() => {
+                const hasKey = !!import.meta.env.VITE_ANTHROPIC_API_KEY;
+                return (
+                  <div className={`p-4 rounded-xl border ${hasKey ? 'bg-violet-50 border-violet-100' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">✦</span>
+                        <p className="font-semibold text-slate-900 text-sm">Claude (Anthropic)</p>
+                      </div>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${hasKey ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>
+                        {hasKey ? <><CheckCircle2 size={11} /> Configured</> : '⚠ Missing'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-2">Powers: Onboarding assistant · Family Briefing · Email Intelligence</p>
+                    <code className="text-[10px] text-slate-400 bg-white border rounded px-2 py-0.5 block">VITE_ANTHROPIC_API_KEY=sk-ant-...</code>
+                  </div>
+                );
+              })()}
+
+              {/* Gemini */}
+              {(() => {
+                const hasKey = !!import.meta.env.VITE_API_KEY;
+                return (
+                  <div className={`p-4 rounded-xl border ${hasKey ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">◆</span>
+                        <p className="font-semibold text-slate-900 text-sm">Gemini (Google)</p>
+                      </div>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${hasKey ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>
+                        {hasKey ? <><CheckCircle2 size={11} /> Configured</> : '⚠ Missing'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-2">Powers: AI Chat · Chore suggestions · Meal planning · Calendar AI · Insights reports</p>
+                    <code className="text-[10px] text-slate-400 bg-white border rounded px-2 py-0.5 block">VITE_API_KEY=AIza...</code>
+                  </div>
+                );
+              })()}
+
+              <p className="text-xs text-slate-400 pt-1">
+                💡 Tip: Add both keys to Vercel → Project Settings → Environment Variables, then redeploy.
+              </p>
+            </div>
+          </section>
+
           {/* Family Membership — dynamic */}
           <section className="bg-white border rounded-2xl notion-shadow overflow-hidden">
             <div className="p-6 border-b">

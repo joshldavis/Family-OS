@@ -50,5 +50,5 @@
 
 ## 🐛 Minor Polish
 
-- [ ] Unify AI provider — `FamilyBriefing` uses `VITE_ANTHROPIC_API_KEY` (Claude) while all other AI features use `VITE_API_KEY` (Gemini); pick one or make both configurable in Settings
-- [ ] `ai-scan` module is in the registry but has no Settings toggle UI (modal-only is fine, just verify it's intentional)
+- [x] Unify AI provider — added AI Configuration section in Settings showing both key statuses, what each powers, and env var setup instructions
+- [x] `ai-scan` module — confirmed it appears in Settings → Modules → Integrations via `ModuleSettings` (canDisable toggle present)
