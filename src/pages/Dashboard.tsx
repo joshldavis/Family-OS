@@ -5,6 +5,7 @@ import { useFamily } from '../FamilyContext';
 import { useModules } from '../modules/ModuleContext';
 import {
   CheckCircle2,
+  Circle,
   Clock,
   AlertCircle,
   ArrowRight,
@@ -31,7 +32,7 @@ function getGreeting(): string {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
-  const { state } = useFamily();
+  const { state, dispatch } = useFamily();
   const { user: _user, assignments, chores, events, budgets } = {
     user: state.currentUser,
     assignments: state.assignments,
@@ -51,8 +52,12 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  const todayAssignments = showSchoolwork ? assignments.filter(a => a.dueDate === todayStr) : [];
-  const todayChores      = showChores     ? chores.filter(c => c.dueDate === todayStr)       : [];
+  const todayAssignments       = showSchoolwork ? assignments.filter(a => a.dueDate === todayStr) : [];
+  const todayChores            = showChores     ? chores.filter(c => c.dueDate === todayStr)       : [];
+  const pendingAssignments     = todayAssignments.filter(a => a.status !== Status.DONE);
+  const completedAssignments   = todayAssignments.filter(a => a.status === Status.DONE);
+  const pendingChores          = todayChores.filter(c => c.status !== Status.DONE);
+  const completedChores        = todayChores.filter(c => c.status === Status.DONE);
   const todayEvents      = showCalendar   ? events.filter(e => e.start.startsWith(todayStr)) : [];
 
   const overdueAssignments = showSchoolwork ? assignments.filter(a => a.dueDate < todayStr && a.status !== Status.DONE) : [];
@@ -118,59 +123,109 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
               </span>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               {todayEvents.length === 0 && todayAssignments.length === 0 && todayChores.length === 0 ? (
                 <div className="bg-white border-2 border-dashed rounded-2xl p-12 text-center">
                   <p className="text-slate-400">Nothing scheduled for today. Enjoy the calm!</p>
                 </div>
               ) : (
                 <>
+                  {/* ── Events (no check-off, they're calendar items) ── */}
                   {todayEvents.map(event => (
-                    <div key={event.id} className="flex gap-4 items-start bg-white p-4 rounded-xl border notion-shadow group hover:border-indigo-200 transition-colors">
-                      <div className="w-12 text-right">
-                        <span className="text-xs font-bold text-indigo-600">{event.start.split('T')[1]?.slice(0, 5)}</span>
+                    <div key={event.id} className="flex gap-3 items-center bg-white p-4 rounded-xl border notion-shadow hover:border-indigo-200 transition-colors">
+                      <div className="w-5 flex-shrink-0 flex items-center justify-center">
+                        <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                          <h4 className="font-semibold text-slate-900">{event.title}</h4>
+                          <h4 className="font-semibold text-slate-900 text-sm">{event.title}</h4>
                         </div>
-                        {event.location && <p className="text-xs text-slate-500 mt-1">📍 {event.location}</p>}
+                        {event.location && <p className="text-xs text-slate-500 mt-0.5">📍 {event.location}</p>}
                       </div>
-                      <div className="bg-indigo-50 px-2 py-1 rounded text-[10px] font-bold text-indigo-600 uppercase">Event</div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {event.start.includes('T') && (
+                          <span className="text-xs font-bold text-indigo-600">{event.start.split('T')[1]?.slice(0, 5)}</span>
+                        )}
+                        <div className="bg-indigo-50 px-2 py-0.5 rounded text-[10px] font-bold text-indigo-600 uppercase">Event</div>
+                      </div>
                     </div>
                   ))}
 
-                  {todayAssignments.filter(a => a.status !== Status.DONE).map(assignment => (
-                    <div key={assignment.id} className="flex gap-4 items-start bg-white p-4 rounded-xl border notion-shadow group hover:border-amber-200 transition-colors">
-                      <div className="w-12 text-right">
-                        <span className="text-xs font-bold text-amber-600">{assignment.estimatedMinutes}m</span>
+                  {/* ── Pending assignments ── */}
+                  {pendingAssignments.map(assignment => (
+                    <div key={assignment.id} className="flex gap-3 items-center bg-white p-4 rounded-xl border notion-shadow hover:border-amber-200 transition-colors group">
+                      <button
+                        onClick={() => dispatch({ type: 'COMPLETE_ASSIGNMENT', payload: { id: assignment.id, completedById: user!.id } })}
+                        className="w-5 h-5 flex-shrink-0 rounded-full border-2 border-slate-300 hover:border-amber-500 group-hover:border-amber-400 transition-colors flex items-center justify-center"
+                        title="Mark as done"
+                      >
+                        <Circle size={12} className="text-slate-200 group-hover:text-amber-300 transition-colors" />
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-slate-900 text-sm">{assignment.title}</h4>
+                        <p className="text-xs text-slate-500">{assignment.subject}</p>
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                          <h4 className="font-semibold text-slate-900">{assignment.title}</h4>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1">{assignment.subject}</p>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-xs font-medium text-amber-600">{assignment.estimatedMinutes}m</span>
+                        <div className="bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold text-amber-600 uppercase">School</div>
                       </div>
-                      <div className="bg-amber-50 px-2 py-1 rounded text-[10px] font-bold text-amber-600 uppercase">School</div>
                     </div>
                   ))}
 
-                  {todayChores.filter(c => c.status !== Status.DONE).map(chore => (
-                    <div key={chore.id} className="flex gap-4 items-start bg-white p-4 rounded-xl border notion-shadow group hover:border-green-200 transition-colors">
-                      <div className="w-12 text-right">
-                        <span className="text-xs font-bold text-green-600">Task</span>
+                  {/* ── Pending chores ── */}
+                  {pendingChores.map(chore => (
+                    <div key={chore.id} className="flex gap-3 items-center bg-white p-4 rounded-xl border notion-shadow hover:border-green-200 transition-colors group">
+                      <button
+                        onClick={() => dispatch({ type: 'COMPLETE_CHORE', payload: { id: chore.id, completedById: user!.id } })}
+                        className="w-5 h-5 flex-shrink-0 rounded-full border-2 border-slate-300 hover:border-green-500 group-hover:border-green-400 transition-colors flex items-center justify-center"
+                        title="Mark as done"
+                      >
+                        <Circle size={12} className="text-slate-200 group-hover:text-green-300 transition-colors" />
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-slate-900 text-sm">{chore.title}</h4>
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                          <h4 className="font-semibold text-slate-900">{chore.title}</h4>
-                        </div>
-                      </div>
-                      <div className="bg-green-50 px-2 py-1 rounded text-[10px] font-bold text-green-600 uppercase">Chore</div>
+                      <div className="bg-green-50 px-2 py-0.5 rounded text-[10px] font-bold text-green-600 uppercase flex-shrink-0">Chore</div>
                     </div>
                   ))}
+
+                  {/* ── Completed items ── */}
+                  {(completedAssignments.length > 0 || completedChores.length > 0) && (
+                    <div className="pt-2 space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">Completed today</p>
+                      {completedAssignments.map(assignment => (
+                        <div key={assignment.id} className="flex gap-3 items-center bg-slate-50 p-4 rounded-xl border border-slate-100 opacity-60">
+                          <button
+                            onClick={() => dispatch({ type: 'UPDATE_ASSIGNMENT', payload: { ...assignment, status: Status.NOT_STARTED, completedAt: undefined, completedById: undefined } })}
+                            className="w-5 h-5 flex-shrink-0 rounded-full bg-amber-400 border-2 border-amber-400 flex items-center justify-center hover:bg-slate-200 hover:border-slate-300 transition-colors"
+                            title="Mark as not done"
+                          >
+                            <CheckCircle2 size={14} className="text-white" />
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-slate-500 text-sm line-through">{assignment.title}</h4>
+                            <p className="text-xs text-slate-400">{assignment.subject}</p>
+                          </div>
+                          <div className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-bold text-slate-400 uppercase flex-shrink-0">School</div>
+                        </div>
+                      ))}
+                      {completedChores.map(chore => (
+                        <div key={chore.id} className="flex gap-3 items-center bg-slate-50 p-4 rounded-xl border border-slate-100 opacity-60">
+                          <button
+                            onClick={() => dispatch({ type: 'UNCOMPLETE_CHORE', payload: chore.id })}
+                            className="w-5 h-5 flex-shrink-0 rounded-full bg-green-400 border-2 border-green-400 flex items-center justify-center hover:bg-slate-200 hover:border-slate-300 transition-colors"
+                            title="Mark as not done"
+                          >
+                            <CheckCircle2 size={14} className="text-white" />
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-slate-500 text-sm line-through">{chore.title}</h4>
+                          </div>
+                          <div className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-bold text-slate-400 uppercase flex-shrink-0">Chore</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
