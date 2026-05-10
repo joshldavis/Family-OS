@@ -118,17 +118,18 @@ Write the briefing now:`.trim();
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-indigo-900 text-white rounded-2xl p-6 notion-shadow relative overflow-hidden">
-      {/* Decorative blobs */}
-      <div className="absolute -right-8 -top-8 w-40 h-40 bg-indigo-700/30 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -left-4 -bottom-4 w-24 h-24 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none" />
+    <div className="bg-white border border-indigo-100 rounded-2xl p-6 notion-shadow relative overflow-hidden">
+      {/* Subtle background accent */}
+      <div className="absolute -right-6 -top-6 w-32 h-32 bg-indigo-50 rounded-full pointer-events-none" />
 
       <div className="relative z-10">
         {/* Header row */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Sparkles size={16} className="text-indigo-300" />
-            <h3 className="text-xs font-bold uppercase tracking-widest text-indigo-300">
+            <div className="w-6 h-6 bg-indigo-600 rounded-md flex items-center justify-center">
+              <Sparkles size={13} className="text-white" />
+            </div>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
               AI Family Briefing
             </h3>
           </div>
@@ -136,11 +137,11 @@ Write the briefing now:`.trim();
             onClick={generateBriefing}
             disabled={isLoading}
             title="Refresh briefing"
-            className="p-1.5 rounded-lg hover:bg-indigo-800 transition-colors disabled:opacity-40"
+            className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40"
           >
             <RefreshCw
               size={13}
-              className={`text-indigo-300 ${isLoading ? 'animate-spin' : ''}`}
+              className={`text-slate-400 ${isLoading ? 'animate-spin' : ''}`}
             />
           </button>
         </div>
@@ -148,39 +149,37 @@ Write the briefing now:`.trim();
         {/* Loading skeleton */}
         {isLoading && !briefing && (
           <div className="space-y-2 animate-pulse">
-            <div className="h-3 bg-indigo-700/60 rounded-full w-full" />
-            <div className="h-3 bg-indigo-700/60 rounded-full w-5/6" />
-            <div className="h-3 bg-indigo-700/60 rounded-full w-full" />
-            <div className="h-3 bg-indigo-700/60 rounded-full w-4/5" />
-            <div className="h-3 bg-indigo-700/60 rounded-full w-3/4" />
+            <div className="h-3 bg-slate-100 rounded-full w-full" />
+            <div className="h-3 bg-slate-100 rounded-full w-5/6" />
+            <div className="h-3 bg-slate-100 rounded-full w-full" />
+            <div className="h-3 bg-slate-100 rounded-full w-4/5" />
+            <div className="h-3 bg-slate-100 rounded-full w-3/4" />
           </div>
         )}
 
-        {/* Briefing text — visible even while a background refresh is in flight */}
+        {/* Briefing text */}
         {briefing && (
-          <p className={`text-sm leading-relaxed text-indigo-100 transition-opacity ${isLoading ? 'opacity-50' : 'opacity-100'}`}>
+          <p className={`text-sm leading-relaxed text-slate-700 transition-opacity ${isLoading ? 'opacity-40' : 'opacity-100'}`}>
             {briefing}
           </p>
         )}
 
         {/* Error state */}
         {!isLoading && error && (
-          <div className="flex items-start gap-2 text-indigo-300 mt-2">
-            <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2 text-slate-500 mt-2">
+            <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-amber-500" />
             <p className="text-sm leading-relaxed">{error}</p>
           </div>
         )}
 
-        {/* Placeholder when nothing has loaded yet (no API key, no error shown yet) */}
+        {/* Placeholder */}
         {!isLoading && !briefing && !error && (
-          <p className="text-sm text-indigo-400 italic">
-            Generating your family briefing…
-          </p>
+          <p className="text-sm text-slate-400 italic">Generating your family briefing…</p>
         )}
 
         {/* Timestamp */}
         {briefing && minsAgo !== null && !isLoading && (
-          <p className="text-[10px] text-indigo-400 mt-3">
+          <p className="text-[10px] text-slate-400 mt-3">
             Generated {minsAgo < 1 ? 'just now' : `${minsAgo}m ago`}
           </p>
         )}
