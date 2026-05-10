@@ -419,7 +419,7 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
       case 'wellness':
         return { users: activeFamilyUsers, currentUser: state.currentUser };
       case 'goals':
-        return { users: activeFamilyUsers, currentUser: state.currentUser };
+        return { users: activeFamilyUsers, currentUser: state.currentUser, rewardTransactions, setRewardTransactions };
       case 'health':
         return { users: activeFamilyUsers };
       case 'settings':
