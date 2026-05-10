@@ -40,6 +40,7 @@ interface VoiceOverlayProps {
   status: 'idle' | 'listening' | 'thinking' | 'speaking';
   transcript: string;
   lastResponse: string;
+  error: string | null;
   onStart: () => void;
   onStop: () => void;
   onMute: () => void;
@@ -48,7 +49,7 @@ interface VoiceOverlayProps {
 }
 
 const VoiceOverlay: React.FC<VoiceOverlayProps> = ({
-  status, transcript, lastResponse, onStart, onStop, onMute, onSwitchToChat, onClose,
+  status, transcript, lastResponse, error, onStart, onStop, onMute, onSwitchToChat, onClose,
 }) => {
   const statusConfig = {
     idle:      { label: 'Tap to speak',   orb: 'bg-indigo-600 shadow-indigo-400', pulse: false },
@@ -122,9 +123,16 @@ const VoiceOverlay: React.FC<VoiceOverlayProps> = ({
             <p className="text-white text-sm leading-relaxed">{lastResponse}</p>
           </div>
         )}
-        {!transcript && !lastResponse && status === 'idle' && (
+        {error ? (
+          <div className="bg-red-500/20 border border-red-500/30 rounded-2xl p-4 space-y-3 text-center">
+            <p className="text-red-300 text-sm leading-relaxed">{error}</p>
+            <button onClick={onSwitchToChat} className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors">
+              <Send size={12} /> Use text chat instead
+            </button>
+          </div>
+        ) : !transcript && !lastResponse && status === 'idle' ? (
           <p className="text-center text-white/30 text-xs">Tap the orb above to start talking</p>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -183,14 +191,9 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
     },
     onError: (err) => {
       if (err.includes('no-speech')) return; // normal timeout, ignore
-      if (err.includes('not-allowed') || err.includes('denied')) {
-        // Auto-switch to text chat — no need to hunt for browser settings
-        exitVoiceMode();
-        setIsOpen(true);
-        setVoiceError('Microphone access is blocked. Using text chat instead.');
-      } else {
-        setVoiceError(err);
-      }
+      setVoiceError(err.includes('not-allowed') || err.includes('denied')
+        ? 'Microphone access is blocked. Go to System Settings → Privacy & Security → Microphone and enable your browser, then try again.'
+        : err);
     },
   });
 
@@ -243,12 +246,19 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
   }, [isLoading, messages, familyContext, speakText, startListening]);
 
   // ── Voice mode controls ─────────────────────────────────────────────────
-  const enterVoiceMode = useCallback(() => {
+  const enterVoiceMode = useCallback(async () => {
     setVoiceMode(true);
     setIsOpen(true);
     setVoiceError(null);
     stopSpeaking();
-    setTimeout(() => startListening(), 200);
+    // Explicitly request mic permission — this triggers the native browser prompt
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop()); // release the stream; SpeechRecognition handles its own
+      setTimeout(() => startListening(), 100);
+    } catch {
+      setVoiceError('Microphone access is blocked. On Mac: System Settings → Privacy & Security → Microphone → enable your browser. Then try again.');
+    }
   }, [startListening, stopSpeaking]);
 
   const exitVoiceMode = useCallback(() => {
@@ -297,6 +307,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
               status={voiceStatus}
               transcript={voiceTranscript}
               lastResponse={lastResponse}
+              error={voiceError}
               onStart={() => { setVoiceError(null); startListening(); }}
               onStop={stopListening}
               onMute={stopSpeaking}
@@ -342,17 +353,6 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
               </button>
             </div>
           </div>
-
-          {/* Mic blocked banner */}
-          {voiceError && (
-            <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-50 border-b border-amber-100 text-amber-800 text-xs">
-              <MicOff size={14} className="flex-shrink-0" />
-              <span>{voiceError}</span>
-              <button onClick={() => setVoiceError(null)} className="ml-auto text-amber-500 hover:text-amber-700">
-                <X size={14} />
-              </button>
-            </div>
-          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
