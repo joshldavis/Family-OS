@@ -40,72 +40,72 @@ interface VoiceOverlayProps {
   status: 'idle' | 'listening' | 'thinking' | 'speaking';
   transcript: string;
   lastResponse: string;
+  onStart: () => void;
   onStop: () => void;
   onMute: () => void;
   onSwitchToChat: () => void;
   onClose: () => void;
-  isSpeaking: boolean;
 }
 
 const VoiceOverlay: React.FC<VoiceOverlayProps> = ({
-  status, transcript, lastResponse, onStop, onMute, onSwitchToChat, onClose, isSpeaking,
+  status, transcript, lastResponse, onStart, onStop, onMute, onSwitchToChat, onClose,
 }) => {
   const statusConfig = {
-    idle:      { label: 'Tap the orb to speak',    orb: 'bg-indigo-600 shadow-indigo-300', pulse: false },
-    listening: { label: 'Listening…',               orb: 'bg-red-500 shadow-red-300',     pulse: true  },
-    thinking:  { label: 'Thinking…',                orb: 'bg-amber-400 shadow-amber-200', pulse: false },
-    speaking:  { label: 'Speaking…',                orb: 'bg-indigo-500 shadow-indigo-300', pulse: true },
+    idle:      { label: 'Tap to speak',   orb: 'bg-indigo-600 shadow-indigo-400', pulse: false },
+    listening: { label: 'Listening…',     orb: 'bg-red-500 shadow-red-400',       pulse: true  },
+    thinking:  { label: 'Thinking…',      orb: 'bg-amber-400 shadow-amber-300',   pulse: false },
+    speaking:  { label: 'Speaking…',      orb: 'bg-emerald-500 shadow-emerald-400', pulse: true },
   }[status];
 
+  const handleOrbClick = () => {
+    if (status === 'idle') onStart();
+    else if (status === 'listening') onStop();
+    else if (status === 'speaking') onMute();
+  };
+
   return (
-    <div className="absolute inset-0 z-10 flex flex-col items-center justify-between bg-slate-900/96 backdrop-blur-md p-6 rounded-none">
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-between bg-slate-950 p-6">
       {/* Top bar */}
       <div className="w-full flex justify-between items-center">
-        <div className="flex items-center gap-2 text-white/60 text-xs font-semibold uppercase tracking-widest">
-          <Sparkles size={13} className="text-indigo-400" />
-          Voice Mode
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-indigo-500 rounded-md flex items-center justify-center">
+            <Sparkles size={13} className="text-white" />
+          </div>
+          <span className="text-white text-sm font-bold">Voice Mode</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Switch to text chat */}
           <button
             onClick={onSwitchToChat}
-            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
           >
             <Send size={12} />
             Text chat
           </button>
-          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors p-1">
+          <button onClick={onClose} className="text-white/50 hover:text-white transition-colors p-1">
             <X size={20} />
           </button>
         </div>
       </div>
 
       {/* Orb */}
-      <div className="flex flex-col items-center gap-5">
+      <div className="flex flex-col items-center gap-4">
         <button
-          onClick={status === 'listening' ? onStop : undefined}
-          className={`w-32 h-32 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300
-            ${statusConfig.orb} ${statusConfig.pulse ? 'animate-pulse' : ''}`}
+          onClick={handleOrbClick}
+          disabled={status === 'thinking'}
+          className={`w-32 h-32 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 active:scale-95
+            ${statusConfig.orb} ${statusConfig.pulse ? 'animate-pulse' : ''} ${status === 'thinking' ? 'cursor-not-allowed' : 'cursor-pointer hover:opacity-90'}`}
         >
           {status === 'thinking' ? (
             <Loader2 size={44} className="text-white animate-spin" />
           ) : status === 'speaking' ? (
-            <Volume2 size={44} className="text-white" />
+            <VolumeX size={44} className="text-white" />
+          ) : status === 'listening' ? (
+            <MicOff size={44} className="text-white" />
           ) : (
             <Mic size={44} className="text-white" />
           )}
         </button>
-        <p className="text-white/60 text-sm font-medium tracking-wide">{statusConfig.label}</p>
-        {/* Mute button while speaking */}
-        {isSpeaking && (
-          <button
-            onClick={onMute}
-            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white/70 text-xs font-semibold px-4 py-2 rounded-full transition-colors"
-          >
-            <VolumeX size={14} />
-            Stop speaking
-          </button>
-        )}
+        <p className="text-white/70 text-sm font-medium">{statusConfig.label}</p>
       </div>
 
       {/* Transcript / response */}
@@ -117,10 +117,13 @@ const VoiceOverlay: React.FC<VoiceOverlayProps> = ({
           </div>
         )}
         {lastResponse && (
-          <div className="bg-indigo-500/20 border border-indigo-400/20 rounded-2xl p-4">
-            <p className="text-[10px] text-indigo-300/70 uppercase tracking-widest mb-1 font-bold">Assistant</p>
-            <p className="text-white/90 text-sm leading-relaxed">{lastResponse}</p>
+          <div className="bg-indigo-500/20 border border-indigo-500/30 rounded-2xl p-4">
+            <p className="text-[10px] text-indigo-300 uppercase tracking-widest mb-1 font-bold">Assistant</p>
+            <p className="text-white text-sm leading-relaxed">{lastResponse}</p>
           </div>
+        )}
+        {!transcript && !lastResponse && status === 'idle' && (
+          <p className="text-center text-white/30 text-xs">Tap the orb above to start talking</p>
         )}
       </div>
     </div>
@@ -281,11 +284,11 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
               status={voiceStatus}
               transcript={voiceTranscript}
               lastResponse={lastResponse}
+              onStart={startListening}
               onStop={stopListening}
               onMute={stopSpeaking}
               onSwitchToChat={switchToChat}
               onClose={() => { exitVoiceMode(); setIsOpen(false); }}
-              isSpeaking={isSpeaking}
             />
           )}
 
