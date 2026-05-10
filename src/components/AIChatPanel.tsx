@@ -40,6 +40,7 @@ interface VoiceOverlayProps {
   status: 'idle' | 'listening' | 'thinking' | 'speaking';
   transcript: string;
   lastResponse: string;
+  error: string | null;
   onStart: () => void;
   onStop: () => void;
   onMute: () => void;
@@ -48,7 +49,7 @@ interface VoiceOverlayProps {
 }
 
 const VoiceOverlay: React.FC<VoiceOverlayProps> = ({
-  status, transcript, lastResponse, onStart, onStop, onMute, onSwitchToChat, onClose,
+  status, transcript, lastResponse, error, onStart, onStop, onMute, onSwitchToChat, onClose,
 }) => {
   const statusConfig = {
     idle:      { label: 'Tap to speak',   orb: 'bg-indigo-600 shadow-indigo-400', pulse: false },
@@ -122,7 +123,18 @@ const VoiceOverlay: React.FC<VoiceOverlayProps> = ({
             <p className="text-white text-sm leading-relaxed">{lastResponse}</p>
           </div>
         )}
-        {!transcript && !lastResponse && status === 'idle' && (
+        {error && (
+          <div className="bg-red-500/20 border border-red-500/30 rounded-2xl p-4 text-center">
+            <p className="text-red-300 text-sm leading-relaxed">{error}</p>
+            <button
+              onClick={onSwitchToChat}
+              className="mt-3 text-xs font-semibold text-white/70 hover:text-white underline"
+            >
+              Switch to text chat instead
+            </button>
+          </div>
+        )}
+        {!transcript && !lastResponse && !error && status === 'idle' && (
           <p className="text-center text-white/30 text-xs">Tap the orb above to start talking</p>
         )}
       </div>
@@ -141,6 +153,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [lastResponse, setLastResponse] = useState('');
   const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
@@ -179,6 +192,15 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
         setVoiceTranscript(text);
         setTimeout(() => sendMessage(text, true), 300);
       }
+    },
+    onError: (err) => {
+      setVoiceError(
+        err.includes('not-allowed') || err.includes('denied')
+          ? 'Microphone access was denied. Please allow microphone access in your browser and try again.'
+          : err.includes('no-speech')
+          ? null  // not-speech is normal, just ignore
+          : err
+      );
     },
   });
 
@@ -234,6 +256,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
   const enterVoiceMode = useCallback(() => {
     setVoiceMode(true);
     setIsOpen(true);
+    setVoiceError(null);
     stopSpeaking();
     setTimeout(() => startListening(), 200);
   }, [startListening, stopSpeaking]);
@@ -284,7 +307,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
               status={voiceStatus}
               transcript={voiceTranscript}
               lastResponse={lastResponse}
-              onStart={startListening}
+              error={voiceError}
+              onStart={() => { setVoiceError(null); startListening(); }}
               onStop={stopListening}
               onMute={stopSpeaking}
               onSwitchToChat={switchToChat}
