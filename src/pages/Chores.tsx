@@ -126,7 +126,7 @@ Rules:
 `.trim();
 
       const result = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         contents: [{
           parts: [{
             text: `You are a smart chore scheduler for a family. Reassign the incomplete chores to optimize fairness and efficiency. Return a JSON array of objects with: { "choreId": string, "assigneeId": string, "dueDate": string (YYYY-MM-DD) }. Only include chores that need reassignment.\n\n${context}`

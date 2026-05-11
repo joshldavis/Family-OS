@@ -104,7 +104,7 @@ ${savings.map(s => `- ${s.name}: $${s.currentAmount}/$${s.targetAmount}`).join('
 `.trim();
 
       const result = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         contents: [{ parts: [{ text: `Analyze the following family data and provide insights. Return a JSON object with:
 - "observations": array of 3-4 short (1-2 sentence) observations about the family's productivity, schedule, and finances
 - "actionItems": array of 2-3 specific, actionable recommendations

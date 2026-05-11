@@ -268,7 +268,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
           const apiKey = import.meta.env.VITE_API_KEY || '';
           const ai = new GoogleGenAI({ apiKey });
           const result = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.0-flash',
             contents: [{ parts: [
               { inlineData: { data: base64, mimeType } },
               { text: 'Transcribe exactly what is spoken. Return only the spoken words, nothing else.' }
@@ -313,7 +313,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
         { role: 'user', parts: [{ text: text.trim() }] },
       ];
       const result = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         contents: history,
         config: { systemInstruction: `You are a helpful family assistant inside "Family OS". Be warm, concise, practical. Use emoji occasionally. Keep responses to 2-4 paragraphs max.\n\nFamily context:\n${familyContext}` },
       });

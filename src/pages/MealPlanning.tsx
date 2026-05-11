@@ -198,7 +198,7 @@ if the suggestion matches a library recipe exactly, or:
 for something new. No explanation. Just the JSON.`;
 
       const result = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         contents: [{ parts: [{ text: prompt }] }],
         config: { responseMimeType: 'application/json' },
       });
@@ -247,7 +247,7 @@ Return a JSON array of objects: [{"date":"YYYY-MM-DD","mealType":"breakfast|lunc
 Only return JSON. No explanation.`;
 
       const result = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         contents: [{ parts: [{ text: prompt }] }],
         config: { responseMimeType: 'application/json' },
       });
