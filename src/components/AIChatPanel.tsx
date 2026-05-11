@@ -160,6 +160,9 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
   const mediaRecorderRef  = useRef<MediaRecorder | null>(null);
   const audioChunksRef    = useRef<Blob[]>([]);
   const streamRef         = useRef<MediaStream | null>(null);
+  // Ref keeps sendMessage always fresh inside stopRecordingAndTranscribe (fixes stale closure)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sendMessageRef    = useRef<(text: string, fromVoice?: boolean) => Promise<void>>(async () => {});
 
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
@@ -252,8 +255,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
           if (transcript) {
             setVoiceTranscript(transcript);
             setIsLoading(false);
-            // sendMessage will set isLoading again for the chat response
-            await sendMessage(transcript, true);
+            // Use ref so we always call the latest sendMessage, not a stale closure
+            await sendMessageRef.current(transcript, true);
           } else {
             setIsLoading(false);
           }
@@ -265,7 +268,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
       reader.readAsDataURL(blob);
     };
     recorder.stop();
-  }, []);  // sendMessage added below via ref
+  }, []); // stopRecordingAndTranscribe is stable; sendMessage accessed via ref above
 
   // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = useCallback(async (text: string, fromVoice = false) => {
@@ -311,22 +314,40 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
     }
   }, [isLoading, messages, familyContext, speakText, startListening, useGeminiSTT, startRecording]);
 
+  // Keep sendMessageRef in sync so async callbacks always use the latest version
+  useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
+
   // ── Voice mode controls ───────────────────────────────────────────────────
   const enterVoiceMode = useCallback(async () => {
+    // Fast-fail if the Gemini key is missing (needed for Safari STT + all AI chat)
+    const apiKey = import.meta.env.VITE_API_KEY as string | undefined;
+    if (!apiKey) {
+      setVoiceMode(true);
+      setIsOpen(true);
+      setVoiceError('Add VITE_API_KEY to your .env file to enable voice mode.');
+      return;
+    }
+
     setVoiceMode(true);
     setIsOpen(true);
     setVoiceError(null);
     stopSpeaking();
+
+    // iOS Safari blocks speechSynthesis.speak() in async callbacks unless we
+    // "unlock" TTS with a silent utterance during the user-gesture frame.
+    if (window.speechSynthesis) {
+      const unlock = new SpeechSynthesisUtterance('');
+      unlock.volume = 0;
+      window.speechSynthesis.speak(unlock);
+    }
+
     if (useGeminiSTT) {
+      // Safari / fallback: use MediaRecorder + Gemini STT
       await startRecording();
     } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        startListening();
-        setTimeout(() => stream.getTracks().forEach(t => t.stop()), 1500);
-      } catch {
-        setVoiceError('Microphone access denied. Check System Settings → Privacy & Security → Microphone.');
-      }
+      // Chrome / Edge: Web Speech API handles its own mic permission internally.
+      // Do NOT open a separate getUserMedia stream — it conflicts with Web Speech.
+      startListening();
     }
   }, [useGeminiSTT, startRecording, startListening, stopSpeaking]);
 
