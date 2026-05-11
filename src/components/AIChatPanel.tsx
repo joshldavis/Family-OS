@@ -164,6 +164,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
   // Ref keeps sendMessage always fresh inside stopRecordingAndTranscribe (fixes stale closure)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sendMessageRef    = useRef<(text: string, fromVoice?: boolean) => Promise<void>>(async () => {});
+  // Tracks whether TTS actually started — used to detect silent iOS blocking
+  const isSpeakingRef     = useRef(false);
 
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
@@ -177,13 +179,33 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
     const preferred = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Samantha') || v.name.includes('Google')))
       ?? voices.find(v => v.lang.startsWith('en'));
     if (preferred) utt.voice = preferred;
-    utt.onstart = () => setIsSpeaking(true);
-    utt.onend   = () => { setIsSpeaking(false); onDone?.(); };
-    utt.onerror = () => { setIsSpeaking(false); onDone?.(); };
-    window.speechSynthesis.speak(utt);
-  }, []);
 
-  const stopSpeaking = useCallback(() => { window.speechSynthesis?.cancel(); setIsSpeaking(false); }, []);
+    // Guard so onDone fires exactly once regardless of which path triggers it
+    let doneCalled = false;
+    const done = () => {
+      if (doneCalled) return;
+      doneCalled = true;
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
+      onDone?.();
+    };
+
+    utt.onstart = () => { setIsSpeaking(true); isSpeakingRef.current = true; };
+    utt.onend   = done;
+    utt.onerror = done;
+    window.speechSynthesis.speak(utt);
+
+    // iOS Safari often blocks speechSynthesis silently in async contexts —
+    // onstart/onend/onerror never fire. After 1.5 s, if TTS hasn't started,
+    // call onDone anyway so voice-mode auto-restarts listening.
+    setTimeout(() => { if (!isSpeakingRef.current) done(); }, 1500);
+  }, []); // isSpeakingRef is a ref, not reactive — safe to omit from deps
+
+  const stopSpeaking = useCallback(() => {
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
+    isSpeakingRef.current = false;
+  }, []);
 
   // ── Web Speech API (Chrome/Edge) ─────────────────────────────────────────
   const { isListening, isSupported: nativeSpeechSupported, startListening, stopListening } = useSpeechInput({
@@ -301,6 +323,9 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
       setLastResponse(responseText);
 
       if (fromVoice || voiceModeRef.current) {
+        // Single-fire guard: speakText's onDone callback and the 1.5s iOS
+        // fallback inside speakText both eventually call this. The doneCalled
+        // guard inside speakText ensures it fires exactly once.
         speakText(responseText, () => {
           if (!voiceModeRef.current) return;
           if (useGeminiSTT) startRecording();   // Safari: start recording again
