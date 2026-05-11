@@ -77,7 +77,7 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  // Helper: was this chore completed today (local date)?
+  // Was this chore completed today (in local time)?
   const completedToday = (c: Chore) => {
     if (c.status !== Status.DONE || !c.completedAt) return false;
     const d = new Date(c.completedAt);
@@ -86,14 +86,22 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
   };
 
   const todayAssignments     = showSchoolwork ? assignments.filter(a => a.dueDate === todayStr) : [];
-  // Show a chore if it's scheduled today AND (still pending OR just completed today)
-  const todayChores          = showChores
-    ? chores.filter(c => isChoreScheduledOn(c, todayStr) && (c.status !== Status.DONE || completedToday(c)))
-    : [];
+
+  // Chore visibility rules:
+  // - DAILY: always show (acts as a daily checklist; done-from-yesterday shows as pending again)
+  // - All others: show if dueDate <= today and not yet marked done
+  const todayChores = showChores ? chores.filter(c => {
+    if (c.frequency === Frequency.DAILY) return true;         // daily chores always on timeline
+    return c.dueDate <= todayStr && c.status !== Status.DONE; // others: due/overdue and pending
+  }) : [];
+
   const pendingAssignments   = todayAssignments.filter(a => a.status !== Status.DONE);
   const completedAssignments = todayAssignments.filter(a => a.status === Status.DONE);
-  const pendingChores        = todayChores.filter(c => c.status !== Status.DONE);
-  const completedChores      = todayChores.filter(c => completedToday(c));
+  // Daily chores: pending if NOT completed today. Others: pending if status != DONE
+  const pendingChores   = todayChores.filter(c =>
+    c.frequency === Frequency.DAILY ? !completedToday(c) : c.status !== Status.DONE
+  );
+  const completedChores = todayChores.filter(c => completedToday(c));
   const todayEvents      = showCalendar   ? events.filter(e => e.start.startsWith(todayStr)) : [];
 
   const overdueAssignments = showSchoolwork ? assignments.filter(a => a.dueDate < todayStr && a.status !== Status.DONE) : [];
