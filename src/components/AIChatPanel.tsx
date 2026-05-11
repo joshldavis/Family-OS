@@ -147,7 +147,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
   const [voiceMode, setVoiceMode]   = useState(false);
   const [messages, setMessages]     = useState<ChatMessage[]>([]);
   const [input, setInput]           = useState('');
-  const [isLoading, setIsLoading]   = useState(false);
+  const [isLoading, setIsLoading]       = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false); // Gemini STT phase (separate from AI response)
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [lastResponse, setLastResponse]     = useState('');
   const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -228,13 +229,13 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
     if (!recorder || recorder.state === 'inactive') return;
 
     setIsRecording(false);
-    setIsLoading(true);
+    setIsTranscribing(true); // Use separate state so isLoading stays false → sendMessage won't bail out
     setVoiceTranscript('');
 
     recorder.onstop = async () => {
       streamRef.current?.getTracks().forEach(t => t.stop());
       const chunks = audioChunksRef.current;
-      if (!chunks.length) { setIsLoading(false); return; }
+      if (!chunks.length) { setIsTranscribing(false); return; }
 
       const blob = new Blob(chunks, { type: chunks[0].type });
       const reader = new FileReader();
@@ -254,15 +255,15 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
           const transcript = result.text?.trim() ?? '';
           if (transcript) {
             setVoiceTranscript(transcript);
-            setIsLoading(false);
+            setIsTranscribing(false); // Clear BEFORE calling sendMessage so isLoading guard sees false
             // Use ref so we always call the latest sendMessage, not a stale closure
             await sendMessageRef.current(transcript, true);
           } else {
-            setIsLoading(false);
+            setIsTranscribing(false);
           }
         } catch {
           setVoiceError('Could not transcribe audio. Please try again.');
-          setIsLoading(false);
+          setIsTranscribing(false);
         }
       };
       reader.readAsDataURL(blob);
@@ -370,7 +371,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
   useEffect(() => { if (!isOpen) { stopSpeaking(); stopListening(); } }, [isOpen, stopSpeaking, stopListening]);
 
   const voiceStatus: 'idle' | 'listening' | 'thinking' | 'speaking' =
-    isSpeaking ? 'speaking' : isLoading ? 'thinking' : (isListening || isRecording) ? 'listening' : 'idle';
+    isSpeaking ? 'speaking' : (isLoading || isTranscribing) ? 'thinking' : (isListening || isRecording) ? 'listening' : 'idle';
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
@@ -488,7 +489,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
                 </div>
               ))
             )}
-            {isLoading && (
+            {(isLoading || isTranscribing) && (
               <div className="flex gap-3">
                 <div className="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Bot size={14} className="text-indigo-600" />
