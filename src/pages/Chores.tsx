@@ -6,6 +6,7 @@ import { Plus, CheckSquare, Square, Trash2, Calendar, User as UserIcon, Sparkles
 import AIScanModal from '../components/AIScanModal';
 import { useFamily } from '../FamilyContext';
 import { useSpeechInput } from '../hooks/useSpeechInput';
+import { getMemberColors, getInitials } from '../utils/memberColors';
 
 interface ChoresProps {
   users: User[];
@@ -165,23 +166,35 @@ Rules:
   const completedChores = filteredChores.filter(c => c.status === Status.DONE);
 
   const ChoreCard: React.FC<{ chore: Chore }> = ({ chore }) => {
-    const assignee = users.find(u => u.id === chore.assigneeId);
+    const assigneeIdx = users.findIndex(u => u.id === chore.assigneeId);
+    const assignee    = assigneeIdx >= 0 ? users[assigneeIdx] : null;
+    const colors      = assigneeIdx >= 0 ? getMemberColors(assigneeIdx) : null;
     return (
-      <div className={`bg-white border p-4 rounded-xl notion-shadow group hover:border-indigo-200 transition-all duration-300 flex items-center gap-4 ${deletingId === chore.id ? 'opacity-0 scale-95 translate-x-4 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`bg-white border border-l-4 p-4 rounded-xl notion-shadow group hover:border-indigo-200 transition-all duration-300 flex items-center gap-4 ${colors ? colors.border : 'border-l-slate-200'} ${deletingId === chore.id ? 'opacity-0 scale-95 translate-x-4 pointer-events-none' : 'opacity-100'}`}>
         <button onClick={() => toggleChore(chore.id)} className="text-slate-400 hover:text-indigo-600 transition-colors">
           {chore.status === Status.DONE ? <CheckSquare size={22} className="text-green-500" /> : <Square size={22} />}
         </button>
         <div className="flex-1 min-w-0">
           <h4 className={`font-semibold ${chore.status === Status.DONE ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{chore.title}</h4>
-          <div className="flex items-center gap-4 mt-1">
-            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold text-slate-400">
-              <UserIcon size={12} />
-              {assignee?.name ?? 'Unassigned'}
-            </div>
+          <div className="flex items-center gap-3 mt-1.5">
+            {assignee && colors ? (
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${colors.badge}`}>
+                <span className={`w-3 h-3 rounded-full ${colors.dot} inline-flex items-center justify-center text-[7px] text-white font-bold`}>
+                  {getInitials(assignee.name)[0]}
+                </span>
+                {assignee.name}
+              </span>
+            ) : (
+              <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                <UserIcon size={12} />
+                Unassigned
+              </div>
+            )}
             <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold text-slate-400">
               <Calendar size={12} />
               {chore.dueDate}
             </div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-slate-300">{chore.frequency}</div>
           </div>
         </div>
         <button

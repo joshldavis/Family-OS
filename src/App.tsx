@@ -112,7 +112,7 @@ const loadProfile = (): FamilyProfile | null => {
 // ── Inner app (needs ModuleProvider + FamilyProvider already in tree) ─────────
 const AppInner: React.FC = () => {
   const { isEnabled, getEnabledRoutes, setEnabledModules } = useModules();
-  const { state, dispatch, attentionCount } = useFamily();
+  const { state, dispatch, attentionCount, overdueChores, overdueAssignments, budgetAlerts } = useFamily();
 
   // ── Profile / onboarding ─────────────────────────────────────────────
   const [profile, setProfile] = useState<FamilyProfile | null>(() => loadProfile());
@@ -383,7 +383,7 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
     switch (moduleId) {
       // Core pages — data comes from useFamily() inside the component
       case 'dashboard':
-        return { actionItems, lastScanAt: emailScanConfig.lastScanAt };
+        return { actionItems, lastScanAt: emailScanConfig.lastScanAt, users: activeFamilyUsers };
       case 'schoolwork':
         return {};
       case 'chores':
@@ -510,15 +510,23 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
 
             {/* Dynamic nav */}
             <nav className="flex-1 space-y-1 overflow-y-auto">
-              {navModules.map(mod => (
-                <NavItem
-                  key={mod.id}
-                  to={mod.route!.path}
-                  iconName={mod.icon}
-                  label={mod.route!.label}
-                  badge={mod.id === 'dashboard' ? attentionCount : undefined}
-                />
-              ))}
+              {navModules.map(mod => {
+                const badge =
+                  mod.id === 'dashboard'   ? attentionCount                 :
+                  mod.id === 'schoolwork'  ? overdueAssignments.length      :
+                  mod.id === 'chores'      ? overdueChores.length            :
+                  mod.id === 'finance'     ? budgetAlerts.length             :
+                  undefined;
+                return (
+                  <NavItem
+                    key={mod.id}
+                    to={mod.route!.path}
+                    iconName={mod.icon}
+                    label={mod.route!.label}
+                    badge={badge}
+                  />
+                );
+              })}
             </nav>
 
             <div className="pt-4 border-t space-y-1">
@@ -540,6 +548,12 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
                   <p className="text-sm font-medium truncate">{state.currentUser.name}</p>
                   <p className="text-xs text-slate-500 truncate">{state.currentUser.role}</p>
                 </div>
+                {isSupabaseConfigured && (
+                  <span title="Syncing across devices" className="flex-shrink-0 flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                    Sync
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => dispatch({ type: 'LOGOUT' })}

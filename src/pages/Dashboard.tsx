@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ActionItem, Chore, Frequency, Status } from '../types';
+import { ActionItem, Chore, Frequency, Status, User } from '../types';
 import { useFamily } from '../FamilyContext';
 import { useModules } from '../modules/ModuleContext';
 import {
@@ -18,10 +18,12 @@ import {
 import { Link } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 import FamilyBriefing from '../components/FamilyBriefing';
+import { getMemberColors, getInitials } from '../utils/memberColors';
 
 interface DashboardProps {
   actionItems: ActionItem[];
   lastScanAt: string | null;
+  users?: User[];
 }
 
 /** Returns true if a chore is scheduled to occur on the given date, based on its frequency. */
@@ -56,8 +58,17 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
+const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt, users = [] }) => {
   const { state, dispatch } = useFamily();
+
+  // Build a stable userId → {colors, name} map for color-coded assignee badges
+  const memberMap = React.useMemo(() => {
+    const map = new Map<string, { colors: ReturnType<typeof getMemberColors>; name: string }>();
+    users.forEach((u, idx) => {
+      map.set(u.id, { colors: getMemberColors(idx), name: u.name });
+    });
+    return map;
+  }, [users]);
   const { user: _user, assignments, chores, events, budgets } = {
     user: state.currentUser,
     assignments: state.assignments,
@@ -115,6 +126,20 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
   const formatDisplayDate = (dateStr: string) => {
     const [year, month, day] = dateStr.split('-').map(Number);
     return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  /** Renders a small colored avatar/initials badge for a given userId. */
+  const MemberBadge: React.FC<{ userId: string; className?: string }> = ({ userId, className = '' }) => {
+    const member = memberMap.get(userId);
+    if (!member) return null;
+    return (
+      <span
+        title={member.name}
+        className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-bold ring-2 ring-white ${member.colors.dot} text-white flex-shrink-0 ${className}`}
+      >
+        {getInitials(member.name)}
+      </span>
+    );
   };
 
   if (!user) return null;
@@ -196,25 +221,29 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
                   ))}
 
                   {/* ── Pending assignments ── */}
-                  {pendingAssignments.map(assignment => (
-                    <div key={assignment.id} className="flex gap-3 items-center bg-white p-4 rounded-xl border notion-shadow hover:border-amber-200 transition-colors group">
-                      <button
-                        onClick={() => dispatch({ type: 'COMPLETE_ASSIGNMENT', payload: { id: assignment.id, completedById: user!.id } })}
-                        className="w-5 h-5 flex-shrink-0 rounded-full border-2 border-slate-300 hover:border-amber-500 group-hover:border-amber-400 transition-colors flex items-center justify-center"
-                        title="Mark as done"
-                      >
-                        <Circle size={12} className="text-slate-200 group-hover:text-amber-300 transition-colors" />
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-slate-900 text-sm">{assignment.title}</h4>
-                        <p className="text-xs text-slate-500">{assignment.subject}</p>
+                  {pendingAssignments.map(assignment => {
+                    const member = memberMap.get(assignment.studentId);
+                    return (
+                      <div key={assignment.id} className={`flex gap-3 items-center bg-white p-4 rounded-xl border border-l-4 notion-shadow hover:border-amber-200 transition-colors group ${member ? member.colors.border : 'border-l-amber-300'}`}>
+                        <button
+                          onClick={() => dispatch({ type: 'COMPLETE_ASSIGNMENT', payload: { id: assignment.id, completedById: user!.id } })}
+                          className="w-5 h-5 flex-shrink-0 rounded-full border-2 border-slate-300 hover:border-amber-500 group-hover:border-amber-400 transition-colors flex items-center justify-center"
+                          title="Mark as done"
+                        >
+                          <Circle size={12} className="text-slate-200 group-hover:text-amber-300 transition-colors" />
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-slate-900 text-sm">{assignment.title}</h4>
+                          <p className="text-xs text-slate-500">{assignment.subject}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <MemberBadge userId={assignment.studentId} />
+                          <span className="text-xs font-medium text-amber-600">{assignment.estimatedMinutes}m</span>
+                          <div className="bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold text-amber-600 uppercase">School</div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-xs font-medium text-amber-600">{assignment.estimatedMinutes}m</span>
-                        <div className="bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold text-amber-600 uppercase">School</div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* ── Pending chores ── */}
                   {pendingChores.length > 1 && (
@@ -230,21 +259,28 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
                       </button>
                     </div>
                   )}
-                  {pendingChores.map(chore => (
-                    <div key={chore.id} className="flex gap-3 items-center bg-white p-4 rounded-xl border notion-shadow hover:border-green-200 transition-colors group">
-                      <button
-                        onClick={() => dispatch({ type: 'COMPLETE_CHORE', payload: { id: chore.id, completedById: user!.id } })}
-                        className="w-5 h-5 flex-shrink-0 rounded-full border-2 border-slate-300 hover:border-green-500 group-hover:border-green-400 transition-colors flex items-center justify-center"
-                        title="Mark as done"
-                      >
-                        <Circle size={12} className="text-slate-200 group-hover:text-green-300 transition-colors" />
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-slate-900 text-sm">{chore.title}</h4>
+                  {pendingChores.map(chore => {
+                    const member = memberMap.get(chore.assigneeId);
+                    return (
+                      <div key={chore.id} className={`flex gap-3 items-center bg-white p-4 rounded-xl border border-l-4 notion-shadow hover:border-green-200 transition-colors group ${member ? member.colors.border : 'border-l-green-300'}`}>
+                        <button
+                          onClick={() => dispatch({ type: 'COMPLETE_CHORE', payload: { id: chore.id, completedById: user!.id } })}
+                          className="w-5 h-5 flex-shrink-0 rounded-full border-2 border-slate-300 hover:border-green-500 group-hover:border-green-400 transition-colors flex items-center justify-center"
+                          title="Mark as done"
+                        >
+                          <Circle size={12} className="text-slate-200 group-hover:text-green-300 transition-colors" />
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-slate-900 text-sm">{chore.title}</h4>
+                          {member && <p className="text-[10px] text-slate-400 mt-0.5">{member.name}</p>}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <MemberBadge userId={chore.assigneeId} />
+                          <div className="bg-green-50 px-2 py-0.5 rounded text-[10px] font-bold text-green-600 uppercase">Chore</div>
+                        </div>
                       </div>
-                      <div className="bg-green-50 px-2 py-0.5 rounded text-[10px] font-bold text-green-600 uppercase flex-shrink-0">Chore</div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* ── Completed items ── */}
                   {(completedAssignments.length > 0 || completedChores.length > 0) && (

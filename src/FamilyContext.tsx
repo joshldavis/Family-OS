@@ -3,6 +3,8 @@ import {
   FamilyState,
   FamilyAction,
   Status,
+  Frequency,
+  Chore,
 } from './types';
 import {
   MOCK_USERS,
@@ -513,6 +515,76 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     if (isHydrated) saveToStorage(state);
   }, [state, isHydrated]);
+
+  // ── Auto-reset recurring chores once per app load ────────────────────────────
+  // Runs once after hydration. Resets completed recurring chores whose period has
+  // elapsed and advances their dueDate to the next occurrence.
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const today  = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const now    = today.toISOString();
+    const familyId = state.currentUser?.familyId ?? '';
+
+    const needsReset = (c: Chore): boolean => {
+      if (c.status !== Status.DONE || !c.completedAt) return false;
+      if (c.frequency === Frequency.ONE_TIME) return false;
+      const completedAt  = new Date(c.completedAt);
+      const completedDay = completedAt.toISOString().split('T')[0];
+      switch (c.frequency) {
+        case Frequency.DAILY:    return completedDay < todayStr;
+        case Frequency.WEEKLY:   return today.getTime() - completedAt.getTime() >= 7  * 86400000;
+        case Frequency.BIWEEKLY: return today.getTime() - completedAt.getTime() >= 14 * 86400000;
+        case Frequency.MONTHLY:
+          return today.getMonth() !== completedAt.getMonth()
+              || today.getFullYear() !== completedAt.getFullYear();
+        default: return false;
+      }
+    };
+
+    const advanceDueDate = (c: Chore): string => {
+      const due = new Date(c.dueDate + 'T12:00:00');
+      switch (c.frequency) {
+        case Frequency.WEEKLY:
+          while (due.toISOString().split('T')[0] < todayStr) due.setDate(due.getDate() + 7);
+          return due.toISOString().split('T')[0];
+        case Frequency.BIWEEKLY:
+          while (due.toISOString().split('T')[0] < todayStr) due.setDate(due.getDate() + 14);
+          return due.toISOString().split('T')[0];
+        case Frequency.MONTHLY:
+          while (due.toISOString().split('T')[0] < todayStr) due.setMonth(due.getMonth() + 1);
+          return due.toISOString().split('T')[0];
+        default: return todayStr;
+      }
+    };
+
+    const choresToReset = state.chores.filter(needsReset);
+    if (choresToReset.length === 0) return;
+
+    const resetMap = new Map(
+      choresToReset.map(c => [c.id, {
+        ...c,
+        status: Status.NOT_STARTED,
+        completedAt: undefined,
+        completedById: undefined,
+        dueDate: advanceDueDate(c),
+        updatedAt: now,
+      }])
+    );
+
+    dispatch({
+      type: 'HYDRATE',
+      payload: {
+        chores: state.chores.map(c => resetMap.get(c.id) ?? c),
+      },
+    });
+
+    // Sync each reset chore to Supabase
+    if (familyId) {
+      resetMap.forEach(c => upsertChore(c, familyId));
+    }
+  }, [isHydrated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Supabase real-time subscription ─────────────────────────────────────
   // Subscribes when a family is logged in; unsubscribes on family change / logout.
