@@ -362,7 +362,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
         <button
           onClick={speechSupported ? enterVoiceMode : () => { setIsOpen(true); setVoiceMode(false); }}
           aria-label="Talk to AI"
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white pl-4 pr-5 py-3 rounded-full shadow-xl shadow-indigo-300/50 transition-all hover:scale-105 active:scale-95"
+          className="fixed bottom-6 right-4 md:right-6 z-50 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white pl-4 pr-5 py-3 rounded-full shadow-xl shadow-indigo-300/50 transition-all hover:scale-105 active:scale-95"
+          style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
         >
           <Mic size={18} />
           <span className="text-sm font-semibold">Ask AI</span>

@@ -4,7 +4,7 @@ import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 import { useFamily } from '../FamilyContext';
 
 const ONE_HOUR_MS = 3_600_000;
-const MODEL = 'claude-sonnet-4-20250514';
+const MODEL = 'claude-sonnet-4-6';
 
 // ─────────────────────────────────────────────────────────────────────────────
 

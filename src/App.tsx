@@ -554,7 +554,7 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
 
         {/* Main content */}
         <main className="flex-1 min-w-0 pt-14 md:pt-0 overflow-y-auto">
-          <div className="max-w-5xl mx-auto p-4 md:p-8">
+          <div className="max-w-5xl mx-auto p-4 pb-24 md:pb-8 md:p-8">
             <Routes>
               {enabledRoutes.map(mod => {
                 const PageComponent = MODULE_COMPONENTS[mod.id];

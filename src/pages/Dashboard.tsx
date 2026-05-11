@@ -217,6 +217,19 @@ const Dashboard: React.FC<DashboardProps> = ({ actionItems, lastScanAt }) => {
                   ))}
 
                   {/* ── Pending chores ── */}
+                  {pendingChores.length > 1 && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => pendingChores.forEach(c =>
+                          dispatch({ type: 'COMPLETE_CHORE', payload: { id: c.id, completedById: user!.id } })
+                        )}
+                        className="text-xs font-semibold text-green-600 hover:text-green-700 flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors"
+                      >
+                        <CheckCircle2 size={13} />
+                        Mark all done
+                      </button>
+                    </div>
+                  )}
                   {pendingChores.map(chore => (
                     <div key={chore.id} className="flex gap-3 items-center bg-white p-4 rounded-xl border notion-shadow hover:border-green-200 transition-colors group">
                       <button
