@@ -283,8 +283,12 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
           } else {
             setIsTranscribing(false);
           }
-        } catch {
-          setVoiceError('Could not transcribe audio. Please try again.');
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const isQuota = msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED');
+          setVoiceError(isQuota
+            ? '⚠️ API quota exceeded. Wait a moment and try again.'
+            : 'Could not transcribe audio. Please try again.');
           setIsTranscribing(false);
         }
       };
@@ -332,9 +336,17 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
           else startListening();                 // Chrome: start listening again
         });
       }
-    } catch {
-      const errText = '⚠️ Unable to connect to AI. Check your Gemini API key.';
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isQuota = msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED');
+      const errText = isQuota
+        ? '⚠️ API quota exceeded. Wait a moment and try again.'
+        : '⚠️ Unable to connect to AI. Check your Gemini API key.';
       setMessages(prev => [...prev, { id: `msg-${Date.now()}-err`, role: 'assistant', content: errText }]);
+      // Surface the error in the voice overlay too (it's hidden behind the overlay in voice mode)
+      if (fromVoice || voiceModeRef.current) {
+        setVoiceError(errText);
+      }
     } finally {
       setIsLoading(false);
     }
