@@ -227,8 +227,13 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
   // ── Gemini STT (Safari / MediaRecorder) ─────────────────────────────────
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
+      // Reuse existing stream if still active — on iOS Safari, re-requesting getUserMedia
+      // in a non-gesture async callback (e.g. after TTS ends) can fail silently.
+      // Keeping the stream open across turns avoids that problem.
+      if (!streamRef.current || !streamRef.current.active) {
+        streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      const stream = streamRef.current;
 
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
@@ -255,7 +260,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ familyContext }) => {
     setVoiceTranscript('');
 
     recorder.onstop = async () => {
-      streamRef.current?.getTracks().forEach(t => t.stop());
+      // Stream stays open — we reuse it for the next recording turn (iOS getUserMedia fix)
+      // It's stopped for real only when exitVoiceMode() is called.
       const chunks = audioChunksRef.current;
       if (!chunks.length) { setIsTranscribing(false); return; }
 
