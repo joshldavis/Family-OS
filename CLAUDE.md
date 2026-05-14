@@ -4,13 +4,13 @@
 After completing any feature, fix, or verified change:
 1. Run `npm run build` to confirm clean build
 2. Commit all changed files with a descriptive conventional commit message
-3. Push to `origin feature/phase3-migration`
+3. Push to `origin main`
 
 Do this automatically — no need to ask for confirmation before committing and pushing.
 
 ## Project
 - Stack: React 19 + TypeScript + Vite + Tailwind CSS + HashRouter
-- Working branch: `feature/phase3-migration`
+- Working branch: `main`
 - Remote: `git@github.com:joshldavis/Family-OS.git`
 
 ## Conventions

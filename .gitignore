@@ -3,3 +3,10 @@ dist
 .env
 *.local
 .vercel
+
+# OS noise
+.DS_Store
+**/.DS_Store
+
+# Local archives / backups
+*.zip
