@@ -6,7 +6,7 @@ import { FamilyDocument } from '../types';
 import useLocalStorage from '../hooks/useLocalStorage';
 import {
   Sparkles, Send, Loader2, Bot, User as UserIcon, MessagesSquare,
-  FileText, ScanLine, AlertCircle, Trash2,
+  FileText, ScanLine, AlertCircle, Trash2, Lock, ShieldCheck,
 } from 'lucide-react';
 
 interface CoachMessage {
@@ -20,6 +20,10 @@ interface CoachMessage {
 
 interface FamilyCoachProps {
   documents: FamilyDocument[];
+  /** Whether the user has opted in to AI access of document text. Defaults false. */
+  aiDocAccess?: boolean;
+  /** Inline-enable handler so the Coach can flip the toggle from its own gate screen. */
+  onEnableAiDocAccess?: () => void;
 }
 
 const SUGGESTED_PROMPTS = [
@@ -43,7 +47,7 @@ function buildDocContext(docs: FamilyDocument[]): string {
   }).join('\n\n');
 }
 
-const FamilyCoach: React.FC<FamilyCoachProps> = ({ documents }) => {
+const FamilyCoach: React.FC<FamilyCoachProps> = ({ documents, aiDocAccess = false, onEnableAiDocAccess }) => {
   const [messages, setMessages] = useLocalStorage<CoachMessage[]>('family_os_coach_chat', []);
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
@@ -65,6 +69,10 @@ const FamilyCoach: React.FC<FamilyCoachProps> = ({ documents }) => {
   const sendMessage = async (prompt: string) => {
     const text = prompt.trim();
     if (!text || isThinking) return;
+    if (!aiDocAccess) {
+      setError('Enable AI Document Access to start chatting.');
+      return;
+    }
 
     const userMsg: CoachMessage = {
       id: `m-${Date.now()}-u`,
@@ -148,6 +156,78 @@ const FamilyCoach: React.FC<FamilyCoachProps> = ({ documents }) => {
   };
 
   const docById = (id: string) => documents.find(d => d.id === id);
+
+  // ── Gate screen ─────────────────────────────────────────────────────
+  if (!aiDocAccess) {
+    return (
+      <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+        <header>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <MessagesSquare size={28} className="text-indigo-600" />
+            Family Coach
+          </h1>
+          <p className="text-slate-500 mt-1">
+            An AI assistant grounded in your saved family documents.
+          </p>
+        </header>
+
+        <div className="bg-white border rounded-2xl notion-shadow p-8 max-w-2xl">
+          <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-5">
+            <Lock size={28} className="text-indigo-600" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900">Turn on AI Document Access</h2>
+          <p className="text-sm text-slate-600 mt-2">
+            For your privacy, the Family Coach is <strong>off by default</strong>. Enabling it allows Gemini to read the text from documents you scan into the vault so it can answer questions about them.
+          </p>
+
+          <div className="mt-6 space-y-3 text-sm">
+            <div className="flex items-start gap-3">
+              <ShieldCheck size={18} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-slate-900">What gets sent</p>
+                <p className="text-slate-600 text-xs mt-0.5">Only the OCR'd text of documents you've explicitly scanned with Magic Scan. Other Family OS data (calendar, finance, chores) is not included.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <ShieldCheck size={18} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-slate-900">Where it goes</p>
+                <p className="text-slate-600 text-xs mt-0.5">Each chat turn is sent to Google's Gemini API. Document text is stored locally in your browser, not on a server.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <ShieldCheck size={18} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-slate-900">How to turn it off</p>
+                <p className="text-slate-600 text-xs mt-0.5">Flip this toggle off any time in Settings → Privacy. You can also wipe all stored document text in one click.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-7 flex flex-wrap gap-3">
+            {onEnableAiDocAccess && (
+              <button
+                onClick={onEnableAiDocAccess}
+                className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm shadow-sm"
+              >
+                <Sparkles size={16} /> Enable AI Document Access
+              </button>
+            )}
+            <Link
+              to="/settings"
+              className="flex items-center gap-2 bg-white border text-slate-700 px-5 py-2.5 rounded-xl font-semibold hover:border-slate-300 transition-colors text-sm"
+            >
+              Manage in Settings
+            </Link>
+          </div>
+
+          <p className="text-[11px] text-slate-400 mt-5 leading-relaxed">
+            By enabling, you agree to Google's Gemini API terms for the content sent during chat. Family OS does not train any model on your documents.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">

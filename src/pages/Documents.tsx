@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import { FamilyDocument, DocumentCategory } from '../types';
-import { FolderOpen, Plus, X, AlertTriangle, CheckCircle2, Trash2, Calendar, Search, Sparkles, Upload, Loader2, AlertCircle, ScanLine, FileText } from 'lucide-react';
+import { FolderOpen, Plus, X, AlertTriangle, CheckCircle2, Trash2, Calendar, Search, Sparkles, Upload, Loader2, AlertCircle, ScanLine, FileText, Lock } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useFamily } from '../FamilyContext';
 
 /** Reject non-http(s) URLs to prevent javascript: XSS attacks */
@@ -19,6 +20,8 @@ function sanitizeUrl(url: string): string | undefined {
 interface DocumentsProps {
   documents: FamilyDocument[];
   setDocuments: React.Dispatch<React.SetStateAction<FamilyDocument[]>>;
+  /** When false (default), Magic Scan still auto-fills fields but does NOT persist extractedText. */
+  aiDocAccess?: boolean;
 }
 
 const ALL_CATEGORIES: DocumentCategory[] = ['Insurance', 'Medical', 'School', 'Legal', 'Financial', 'Other'];
@@ -49,7 +52,7 @@ function formatDate(dateStr?: string): string {
 const MAX_SCAN_SIZE_MB = 5;
 const MAX_EXTRACTED_TEXT_LENGTH = 20_000; // keep localStorage footprint sane
 
-const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments }) => {
+const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments, aiDocAccess = false }) => {
   const { state } = useFamily();
   const familyId = (state as any).family?.id ?? 'fam-1';
   const [activeCategory, setActiveCategory] = useState<DocumentCategory | 'All'>('All');
@@ -200,19 +203,26 @@ const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments }) => {
 
       const truncatedText = (parsed.extractedText ?? '').slice(0, MAX_EXTRACTED_TEXT_LENGTH);
 
+      // Privacy: only persist OCR'd text when the user has opted in to AI Document Access.
+      // Without consent, scan results are still used to auto-fill the form fields, but the
+      // raw text isn't retained — so the Family Coach can't see this document.
       setForm({
         name: parsed.name ?? 'Scanned Document',
         category: normalizedCategory,
         expiryDate: parsed.expiryDate ?? '',
         notes: parsed.notes ?? '',
         fileUrl: '',
-        extractedText: truncatedText || undefined,
+        extractedText: aiDocAccess && truncatedText ? truncatedText : undefined,
         source: 'scan',
       });
 
       setScanOpen(false);
       setAddOpen(true);
-      setScanSuccess('Scan complete — review the fields below and save.');
+      setScanSuccess(
+        aiDocAccess
+          ? 'Scan complete — review the fields below and save.'
+          : 'Scan complete. Fields auto-filled — text was not stored (AI access is off).'
+      );
       if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
       successTimeoutRef.current = setTimeout(() => setScanSuccess(null), 4000);
     } catch (err) {
@@ -232,9 +242,15 @@ const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments }) => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Document Vault</h1>
           <p className="text-slate-500 mt-1">Track important family documents and expiration dates.</p>
-          {scannedCount > 0 && (
+          {aiDocAccess && scannedCount > 0 && (
             <p className="text-xs text-indigo-600 mt-1 font-semibold flex items-center gap-1">
               <Sparkles size={12} /> {scannedCount} doc{scannedCount > 1 ? 's' : ''} readable by Family Coach
+            </p>
+          )}
+          {!aiDocAccess && (
+            <p className="text-xs text-slate-500 mt-1 font-semibold flex items-center gap-1">
+              <Lock size={12} /> AI Document Access is off —{' '}
+              <Link to="/settings" className="text-indigo-600 hover:underline">enable in Settings</Link>
             </p>
           )}
         </div>
@@ -380,8 +396,19 @@ const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments }) => {
               ) : (
                 <div className="space-y-5">
                   <p className="text-sm text-slate-600">
-                    Snap a photo or upload an image of a document. We'll pull out the name, category, expiry date, and full text so the Family Coach can answer questions like <em>"what's our auto deductible?"</em> later.
+                    Snap a photo or upload an image of a document. We'll pull out the name, category, and expiry date to auto-fill the form.
                   </p>
+                  {aiDocAccess ? (
+                    <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 flex items-start gap-2 text-xs text-indigo-900">
+                      <Sparkles size={14} className="flex-shrink-0 mt-0.5 text-indigo-600" />
+                      <span><strong>AI Document Access is on.</strong> Extracted text will be stored so the Family Coach can answer questions about this document later.</span>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 border rounded-xl p-3 flex items-start gap-2 text-xs text-slate-700">
+                      <Lock size={14} className="flex-shrink-0 mt-0.5 text-slate-500" />
+                      <span><strong>AI Document Access is off.</strong> Scanned fields will be used to auto-fill the form, but the text will NOT be stored or sent to the Family Coach. <Link to="/settings" className="text-indigo-600 font-semibold hover:underline">Enable in Settings</Link> to let the Coach read your docs.</span>
+                    </div>
+                  )}
                   <div
                     onClick={() => scanFileInputRef.current?.click()}
                     className="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/30 transition-all group"

@@ -185,6 +185,7 @@ const AppInner: React.FC = () => {
   const [rewardTransactions, setRewardTransactions] = useLocalStorage<RewardTransaction[]>('family_os_reward_txns', SEED_REWARD_TRANSACTIONS);
   const [notes,              setNotes]              = useLocalStorage<PinboardNote[]>('family_os_notes',      SEED_NOTES);
   const [documents,          setDocuments]          = useLocalStorage<FamilyDocument[]>('family_os_documents', SEED_DOCUMENTS);
+  const [aiDocAccess,        setAiDocAccess]        = useLocalStorage<boolean>('family_os_ai_doc_access', false);
 
   // ── Email Intelligence state ──────────────────────────────────────────
   const [actionItems,      setActionItems]      = useLocalStorage<ActionItem[]>('family_os_action_items', []);
@@ -316,7 +317,7 @@ const AppInner: React.FC = () => {
     [
       'family_os_profile', 'family_os_recipes', 'family_os_meal_plan',
       'family_os_shopping', 'family_os_rewards', 'family_os_reward_txns',
-      'family_os_notes', 'family_os_documents', 'family_os_coach_chat', 'family_os_action_items',
+      'family_os_notes', 'family_os_documents', 'family_os_ai_doc_access', 'family_os_coach_chat', 'family_os_action_items',
       'family_os_behavior_updates', 'family_os_announcements',
       'family_os_classified_emails', 'family_os_email_config', 'family_os_last_scan',
       'family_os_habits', 'family_os_habit_checkins', 'family_os_family_goals', 'family_os_health_log',
@@ -353,6 +354,10 @@ const AppInner: React.FC = () => {
 
   const handleUpdateEmailConfig = (updates: Partial<EmailScanConfig>) =>
     setEmailScanConfig(p => ({ ...p, ...updates }));
+
+  /** Strip extractedText from every doc — used when the user turns AI Document Access off. */
+  const handleWipeDocText = () =>
+    setDocuments(prev => prev.map(d => ({ ...d, extractedText: undefined })));
 
   // ── Gate 1: onboarding ────────────────────────────────────────────────
   if (!isOnboarded) return <Onboarding onComplete={handleOnboardingComplete} />;
@@ -407,9 +412,9 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
       case 'pinboard':
         return { notes, setNotes, users: activeFamilyUsers, currentUser: state.currentUser };
       case 'documents':
-        return { documents, setDocuments };
+        return { documents, setDocuments, aiDocAccess };
       case 'family-coach':
-        return { documents };
+        return { documents, aiDocAccess, onEnableAiDocAccess: () => setAiDocAccess(true) };
       case 'email-intelligence':
         return {
           actionItems, behaviorUpdates, announcements, classifiedEmails,
@@ -438,6 +443,10 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
           onUpdateNotifSettings: updateNotifSettings,
           onRequestNotifPermission: requestNotifPermission,
           onTestNotification: sendTestNotification,
+          aiDocAccess,
+          onUpdateAiDocAccess: setAiDocAccess,
+          onWipeDocText: handleWipeDocText,
+          scannedDocCount: documents.filter(d => d.extractedText && d.extractedText.length > 0).length,
         };
       default:
         return {};

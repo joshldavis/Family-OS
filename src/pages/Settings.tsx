@@ -24,6 +24,8 @@ import {
   BookOpen,
   Key,
   Zap,
+  Sparkles,
+  MessagesSquare,
 } from 'lucide-react';
 import { DEFAULT_GMAIL_CONFIG, type GmailSyncConfig } from '../services/gmailSync';
 import { DEFAULT_CLASSROOM_CONFIG, type ClassroomSyncConfig } from '../services/classroomSync';
@@ -43,6 +45,11 @@ interface SettingsProps {
   onUpdateNotifSettings?: (patch: Partial<NotificationSettings>) => void;
   onRequestNotifPermission?: () => Promise<NotificationPermission>;
   onTestNotification?: () => void;
+  // AI Document Access (opt-in)
+  aiDocAccess?: boolean;
+  onUpdateAiDocAccess?: (next: boolean) => void;
+  onWipeDocText?: () => void;
+  scannedDocCount?: number;
 }
 
 const Settings: React.FC<SettingsProps> = ({
@@ -56,6 +63,10 @@ const Settings: React.FC<SettingsProps> = ({
   onUpdateNotifSettings,
   onRequestNotifPermission,
   onTestNotification,
+  aiDocAccess = false,
+  onUpdateAiDocAccess,
+  onWipeDocText,
+  scannedDocCount = 0,
 }) => {
   const { state, dispatch } = useFamily();
   const isGoogleLinked = state.isGoogleLinked;
@@ -572,6 +583,85 @@ const Settings: React.FC<SettingsProps> = ({
                   ))}
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* AI Document Access (opt-in) */}
+          <section className="bg-white border rounded-2xl notion-shadow overflow-hidden">
+            <div className="p-6 border-b bg-slate-50/50">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                <Sparkles size={18} className="text-indigo-500" />
+                AI Document Access
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Controls whether scanned document text is stored and readable by the Family Coach. Off by default.
+              </p>
+            </div>
+            <div className="p-6 space-y-5">
+              <label className="flex items-center justify-between gap-4 cursor-pointer group">
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <MessagesSquare size={14} className="text-indigo-500" />
+                    Let the Family Coach read scanned documents
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-lg">
+                    When on, Magic Scan stores the OCR'd text of new documents so the Family Coach can answer questions about them. When off, scans only auto-fill fields and text is not retained.
+                  </p>
+                </div>
+                <div
+                  onClick={() => {
+                    if (!onUpdateAiDocAccess) return;
+                    const turningOff = aiDocAccess;
+                    if (turningOff && scannedDocCount > 0) {
+                      const wipe = confirm(
+                        `Turning AI Document Access off.\n\nYou have ${scannedDocCount} scanned document${scannedDocCount > 1 ? 's' : ''} with stored text. Would you like to also wipe that stored text from your device?\n\nClick OK to wipe, Cancel to keep the text (it just won't be sent to the Coach while access is off).`
+                      );
+                      if (wipe && onWipeDocText) onWipeDocText();
+                    }
+                    onUpdateAiDocAccess(!aiDocAccess);
+                  }}
+                  className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer flex-shrink-0 ${aiDocAccess ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                >
+                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${aiDocAccess ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </div>
+              </label>
+
+              <div className={`rounded-xl border p-4 text-xs ${aiDocAccess ? 'bg-emerald-50/60 border-emerald-100 text-emerald-900' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
+                {aiDocAccess ? (
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5 text-emerald-500" />
+                    <span>
+                      <strong>On</strong> — the Family Coach can answer questions about{' '}
+                      {scannedDocCount > 0
+                        ? `${scannedDocCount} scanned doc${scannedDocCount > 1 ? 's' : ''}`
+                        : 'documents you scan from now on'}.
+                      Document text stays in your browser's local storage; only the relevant text is sent to Gemini at chat time.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2">
+                    <Lock size={14} className="flex-shrink-0 mt-0.5 text-slate-500" />
+                    <span>
+                      <strong>Off</strong> — Magic Scan still works for auto-filling fields, but no document text is stored or sent to the Family Coach.
+                      {scannedDocCount > 0 && ` You currently have ${scannedDocCount} scanned doc${scannedDocCount > 1 ? 's' : ''} with stored text that is not being used.`}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {scannedDocCount > 0 && onWipeDocText && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Wipe stored text from all ${scannedDocCount} scanned document${scannedDocCount > 1 ? 's' : ''}? This cannot be undone — but document names, categories, and expiry dates will be preserved.`)) {
+                      onWipeDocText();
+                    }
+                  }}
+                  className="flex items-center gap-2 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-100 rounded-lg px-3 py-2 transition-colors"
+                >
+                  <Trash2 size={14} />
+                  Wipe extracted text from all docs ({scannedDocCount})
+                </button>
+              )}
             </div>
           </section>
 
