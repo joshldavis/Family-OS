@@ -493,7 +493,7 @@ const Settings: React.FC<SettingsProps> = ({
                         {hasKey ? <><CheckCircle2 size={11} /> Configured</> : '⚠ Missing'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mb-2">Powers: Onboarding assistant · Family Briefing · Email Intelligence</p>
+                    <p className="text-xs text-slate-500 mb-2">Powers: Onboarding assistant · Email Intelligence</p>
                     <code className="text-[10px] text-slate-400 bg-white border rounded px-2 py-0.5 block">VITE_ANTHROPIC_API_KEY=sk-ant-...</code>
                   </div>
                 );
@@ -513,7 +513,7 @@ const Settings: React.FC<SettingsProps> = ({
                         {hasKey ? <><CheckCircle2 size={11} /> Configured</> : '⚠ Missing'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mb-2">Powers: AI Chat · Chore suggestions · Meal planning · Calendar AI · Insights reports</p>
+                    <p className="text-xs text-slate-500 mb-2">Powers: AI Chat · Family Briefing · Document Scan · Family Coach · Chore suggestions · Meal planning · Calendar AI · Insights</p>
                     <code className="text-[10px] text-slate-400 bg-white border rounded px-2 py-0.5 block">VITE_API_KEY=AIza...</code>
                   </div>
                 );

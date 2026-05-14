@@ -1,10 +1,11 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 import { useFamily } from '../FamilyContext';
 
 const ONE_HOUR_MS = 3_600_000;
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = 'gemini-2.0-flash';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -23,9 +24,9 @@ const FamilyBriefing: React.FC = () => {
   };
 
   const generateBriefing = useCallback(async () => {
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
+    const apiKey = import.meta.env.VITE_API_KEY as string | undefined;
     if (!apiKey) {
-      setError('Add VITE_ANTHROPIC_API_KEY to your .env file to enable AI briefings.');
+      setError('AI briefings need a Gemini API key. Add VITE_API_KEY to your .env to enable them.');
       return;
     }
 
@@ -58,31 +59,15 @@ Family context:
 Write the briefing now:`.trim();
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: 512,
-          messages: [{ role: 'user', content: prompt }],
-        }),
+      const ai = new GoogleGenAI({ apiKey });
+      const result = await ai.models.generateContent({
+        model: MODEL,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { maxOutputTokens: 512 },
       });
 
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        throw new Error(
-          (errBody as any)?.error?.message ?? `Anthropic API error ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-      const text: string = (data.content?.[0]?.text ?? '').trim();
-      if (!text) throw new Error('Empty response from Claude.');
+      const text = (result.text ?? '').trim();
+      if (!text) throw new Error('Empty response from Gemini.');
 
       setBriefing(text);
       dispatch({
