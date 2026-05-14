@@ -9,8 +9,11 @@ import {
   User, Role, Student, Assignment, Chore, CalendarEvent,
   MealPlanEntry, Recipe, Status,
 } from '../types';
-import useLocalStorage from '../hooks/useLocalStorage';
-import { structured, modelFor, AIConfigError, Type } from '../services/ai';
+import { AIConfigError } from '../services/ai';
+import {
+  AgendaCache, DailyExtras, generateDailyExtras, studentForUser,
+  cacheKey, todayISO,
+} from '../services/dailyAgenda';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -18,25 +21,14 @@ interface DailyAgendaProps {
   users: User[];
   mealPlan: MealPlanEntry[];
   recipes: Recipe[];
-}
-
-// ─── Cached AI snippets ──────────────────────────────────────────────────────
-
-interface DailyExtras {
-  joke: string;
-  fact: string;
-}
-
-interface AgendaCache {
-  /** Keyed as `${kidId}|${dateISO}`. */
-  [key: string]: DailyExtras;
+  /** Cache hoisted to App.tsx so the prewarm hook and this page share state. */
+  agendaCache: AgendaCache;
+  setAgendaCache: React.Dispatch<React.SetStateAction<AgendaCache>>;
+  /** Most recent prewarm time, if any — surfaced as a small indicator. */
+  prewarmRanToday?: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function todayISO(): string {
-  return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
-}
 
 function fmtDate(dateISO: string): string {
   const [y, m, d] = dateISO.split('-').map(Number);
@@ -49,11 +41,6 @@ function fmtTime(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   } catch { return ''; }
-}
-
-/** Match a Student record to a User by case-insensitive name. */
-function studentForUser(user: User, students: Student[]): Student | undefined {
-  return students.find(s => s.name.toLowerCase() === user.name.toLowerCase());
 }
 
 // ─── Per-kid agenda card ─────────────────────────────────────────────────────
@@ -241,13 +228,14 @@ const KidAgenda: React.FC<KidAgendaProps> = ({
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 
-const DailyAgenda: React.FC<DailyAgendaProps> = ({ users, mealPlan, recipes }) => {
+const DailyAgenda: React.FC<DailyAgendaProps> = ({
+  users, mealPlan, recipes, agendaCache, setAgendaCache, prewarmRanToday,
+}) => {
   const { state } = useFamily();
   const date = todayISO();
 
   const kids = useMemo(() => users.filter(u => u.role === Role.CHILD), [users]);
 
-  const [cache, setCache] = useLocalStorage<AgendaCache>('family_os_daily_agenda', {});
   const [generating, setGenerating] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string | null>>({});
 
@@ -274,41 +262,13 @@ const DailyAgenda: React.FC<DailyAgendaProps> = ({ users, mealPlan, recipes }) =
 
   // ── Generate joke + fact for one kid ─────────────────────────────────────
   const generateFor = useCallback(async (kid: User) => {
-    const key = `${kid.id}|${date}`;
+    const key = cacheKey(kid.id, date);
     setGenerating(prev => ({ ...prev, [kid.id]: true }));
     setErrors(prev => ({ ...prev, [kid.id]: null }));
 
     try {
-      const student = studentForUser(kid, state.students);
-      const ageHint = student?.grade ?? 'school age';
-
-      const systemInstruction =
-        `You write daily one-pager content for children. Audience: a kid in ${ageHint}. ` +
-        `Output one short kid-friendly joke and one short "Fun Fact" that's age-appropriate, ` +
-        `surprising, and PG. Keep each under 30 words. Avoid repeating yesterday's pattern. ` +
-        `Be light, warm, and curious.`;
-
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          joke: { type: Type.STRING },
-          fact: { type: Type.STRING },
-        },
-        required: ['joke', 'fact'],
-      };
-
-      const parsed = await structured<{ joke?: string; fact?: string }>({
-        model: modelFor('briefing'),
-        systemInstruction,
-        responseSchema,
-        text: `Generate today's joke and fun fact for ${kid.name}.`,
-      });
-
-      const next: DailyExtras = {
-        joke: parsed.joke ?? 'No joke today!',
-        fact: parsed.fact ?? '',
-      };
-      setCache(prev => ({ ...prev, [key]: next }));
+      const extras = await generateDailyExtras(kid, state.students);
+      setAgendaCache(prev => ({ ...prev, [key]: extras }));
     } catch (err) {
       console.error(err);
       const msg = err instanceof AIConfigError
@@ -318,13 +278,15 @@ const DailyAgenda: React.FC<DailyAgendaProps> = ({ users, mealPlan, recipes }) =
     } finally {
       setGenerating(prev => ({ ...prev, [kid.id]: false }));
     }
-  }, [date, state.students, setCache]);
+  }, [date, state.students, setAgendaCache]);
 
   // ── On first load: generate for any kid missing today's cache ────────────
+  // The prewarm hook in App.tsx usually beats us to this, but if a child user
+  // was added after login, we still backfill here.
   useEffect(() => {
     kids.forEach(kid => {
-      const key = `${kid.id}|${date}`;
-      if (!cache[key]) generateFor(kid);
+      const key = cacheKey(kid.id, date);
+      if (!agendaCache[key]) generateFor(kid);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -356,6 +318,11 @@ const DailyAgenda: React.FC<DailyAgendaProps> = ({ users, mealPlan, recipes }) =
           <p className="text-slate-500 mt-1">
             A printable one-pager for each kid — today's plan, meals, a joke, and a fun fact.
           </p>
+          {prewarmRanToday && (
+            <p className="text-[11px] text-emerald-600 mt-1 font-semibold flex items-center gap-1">
+              <Sparkles size={11} /> Pre-warmed today — ready to print
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <button
@@ -383,7 +350,7 @@ const DailyAgenda: React.FC<DailyAgendaProps> = ({ users, mealPlan, recipes }) =
       ) : (
         <div className="space-y-6">
           {kids.map(kid => {
-            const key = `${kid.id}|${date}`;
+            const key = cacheKey(kid.id, date);
             const data = dataFor(kid);
             return (
               <KidAgenda
@@ -395,7 +362,7 @@ const DailyAgenda: React.FC<DailyAgendaProps> = ({ users, mealPlan, recipes }) =
                 chores={data.chores}
                 events={data.events}
                 mealsToday={data.mealsToday}
-                extras={cache[key] ?? null}
+                extras={agendaCache[key] ?? null}
                 isGenerating={!!generating[kid.id]}
                 error={errors[kid.id] ?? null}
                 onRegenerate={() => generateFor(kid)}

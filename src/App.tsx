@@ -48,6 +48,10 @@ import {
 // Notifications
 import { useNotifications, BriefingContext } from './hooks/useNotifications';
 
+// Daily Agenda prewarm (generates joke + fact for each kid once per session)
+import { usePrewarmDailyAgenda } from './hooks/usePrewarmDailyAgenda';
+import { AGENDA_CACHE_KEY, type AgendaCache } from './services/dailyAgenda';
+
 // Module system
 import { ModuleProvider, useModules } from './modules/ModuleContext';
 import { ICON_MAP } from './modules/iconMap';
@@ -188,6 +192,7 @@ const AppInner: React.FC = () => {
   const [notes,              setNotes]              = useLocalStorage<PinboardNote[]>('family_os_notes',      SEED_NOTES);
   const [documents,          setDocuments]          = useLocalStorage<FamilyDocument[]>('family_os_documents', SEED_DOCUMENTS);
   const [aiDocAccess,        setAiDocAccess]        = useLocalStorage<boolean>('family_os_ai_doc_access', false);
+  const [agendaCache,        setAgendaCache]        = useLocalStorage<AgendaCache>(AGENDA_CACHE_KEY, {});
 
   // ── Email Intelligence state ──────────────────────────────────────────
   const [actionItems,      setActionItems]      = useLocalStorage<ActionItem[]>('family_os_action_items', []);
@@ -359,6 +364,17 @@ const AppInner: React.FC = () => {
   const handleUpdateEmailConfig = (updates: Partial<EmailScanConfig>) =>
     setEmailScanConfig(p => ({ ...p, ...updates }));
 
+  // Daily Agenda prewarm — fires once per session shortly after login so any
+  // missing kid-day joke/fact is generated in the background before they
+  // navigate to /agenda or hit Print.
+  const prewarmStatus = usePrewarmDailyAgenda(
+    isEnabled('daily-agenda') ? state.students.length ? (profile?.users ?? MOCK_USERS) : [] : [],
+    state.students,
+    agendaCache,
+    setAgendaCache,
+    { enabled: isEnabled('daily-agenda'), loggedIn: !!state.currentUser },
+  );
+
   /** Strip extractedText from every doc — used when the user turns AI Document Access off. */
   const handleWipeDocText = () =>
     setDocuments(prev => prev.map(d => ({ ...d, extractedText: undefined })));
@@ -420,7 +436,14 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
       case 'family-coach':
         return { documents, aiDocAccess, onEnableAiDocAccess: () => setAiDocAccess(true) };
       case 'daily-agenda':
-        return { users: activeFamilyUsers, mealPlan, recipes };
+        return {
+          users: activeFamilyUsers,
+          mealPlan,
+          recipes,
+          agendaCache,
+          setAgendaCache,
+          prewarmRanToday: prewarmStatus.ranToday,
+        };
       case 'email-intelligence':
         return {
           actionItems, behaviorUpdates, announcements, classifiedEmails,
