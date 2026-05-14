@@ -23,6 +23,7 @@ import {
   Activity,
   Heart,
   HeartPulse,
+  MessagesSquare,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -46,4 +47,5 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   Activity,
   Heart,
   HeartPulse,
+  MessagesSquare,
 };

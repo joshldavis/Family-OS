@@ -71,6 +71,7 @@ import ShoppingLists     from './pages/ShoppingLists';
 import Allowance         from './pages/Allowance';
 import Pinboard          from './pages/Pinboard';
 import Documents         from './pages/Documents';
+import FamilyCoach       from './pages/FamilyCoach';
 import EmailIntelligence from './pages/EmailIntelligence';
 import Wellness          from './pages/Wellness';
 import Goals            from './pages/Goals';
@@ -93,6 +94,7 @@ export const MODULE_COMPONENTS: Record<string, ComponentType<any>> = {
   'allowance':           Allowance,
   'pinboard':            Pinboard,
   'documents':           Documents,
+  'family-coach':        FamilyCoach,
   'email-intelligence':  EmailIntelligence,
   'wellness':            Wellness,
   'goals':               Goals,
@@ -314,7 +316,7 @@ const AppInner: React.FC = () => {
     [
       'family_os_profile', 'family_os_recipes', 'family_os_meal_plan',
       'family_os_shopping', 'family_os_rewards', 'family_os_reward_txns',
-      'family_os_notes', 'family_os_documents', 'family_os_action_items',
+      'family_os_notes', 'family_os_documents', 'family_os_coach_chat', 'family_os_action_items',
       'family_os_behavior_updates', 'family_os_announcements',
       'family_os_classified_emails', 'family_os_email_config', 'family_os_last_scan',
       'family_os_habits', 'family_os_habit_checkins', 'family_os_family_goals', 'family_os_health_log',
@@ -406,6 +408,8 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
         return { notes, setNotes, users: activeFamilyUsers, currentUser: state.currentUser };
       case 'documents':
         return { documents, setDocuments };
+      case 'family-coach':
+        return { documents };
       case 'email-intelligence':
         return {
           actionItems, behaviorUpdates, announcements, classifiedEmails,

@@ -513,6 +513,10 @@ export interface FamilyDocument {
   notes?: string;
   fileUrl?: string;
   createdAt: string;
+  /** OCR'd text from a scanned image/PDF. Used to ground AI questions about the doc. */
+  extractedText?: string;
+  /** How this document entered the vault — manual entry vs. AI scan. */
+  source?: 'manual' | 'scan';
 }
 
 // ─── Health Tracker Types ─────────────────────────────────────────────────────

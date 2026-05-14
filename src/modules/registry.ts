@@ -18,6 +18,7 @@ import aiScan           from './definitions/aiScan';
 import wellness         from './definitions/wellness';
 import goals           from './definitions/goals';
 import health          from './definitions/health';
+import familyCoach     from './definitions/familyCoach';
 
 /**
  * Canonical ordered list of all modules.
@@ -37,6 +38,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   allowance,
   pinboard,
   documents,
+  familyCoach,
   emailIntelligence,
   insights,
   aiScan,
