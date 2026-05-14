@@ -1,0 +1,411 @@
+
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import {
+  Printer, Sparkles, RefreshCw, Loader2, AlertCircle,
+  CalendarDays, GraduationCap, ListChecks, ChefHat, Quote, Lightbulb, Sun,
+} from 'lucide-react';
+import { useFamily } from '../FamilyContext';
+import {
+  User, Role, Student, Assignment, Chore, CalendarEvent,
+  MealPlanEntry, Recipe, Status,
+} from '../types';
+import useLocalStorage from '../hooks/useLocalStorage';
+import { structured, modelFor, AIConfigError, Type } from '../services/ai';
+
+// ─── Props ───────────────────────────────────────────────────────────────────
+
+interface DailyAgendaProps {
+  users: User[];
+  mealPlan: MealPlanEntry[];
+  recipes: Recipe[];
+}
+
+// ─── Cached AI snippets ──────────────────────────────────────────────────────
+
+interface DailyExtras {
+  joke: string;
+  fact: string;
+}
+
+interface AgendaCache {
+  /** Keyed as `${kidId}|${dateISO}`. */
+  [key: string]: DailyExtras;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function todayISO(): string {
+  return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
+}
+
+function fmtDate(dateISO: string): string {
+  const [y, m, d] = dateISO.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  });
+}
+
+function fmtTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  } catch { return ''; }
+}
+
+/** Match a Student record to a User by case-insensitive name. */
+function studentForUser(user: User, students: Student[]): Student | undefined {
+  return students.find(s => s.name.toLowerCase() === user.name.toLowerCase());
+}
+
+// ─── Per-kid agenda card ─────────────────────────────────────────────────────
+
+interface KidAgendaProps {
+  kid: User;
+  student?: Student;
+  date: string;
+  assignments: Assignment[];
+  chores: Chore[];
+  events: CalendarEvent[];
+  mealsToday: { mealType: string; label: string }[];
+  extras: DailyExtras | null;
+  isGenerating: boolean;
+  onRegenerate: () => void;
+  error: string | null;
+}
+
+const KidAgenda: React.FC<KidAgendaProps> = ({
+  kid, student, date, assignments, chores, events, mealsToday, extras, isGenerating, onRegenerate, error,
+}) => {
+  const sectionClass = 'rounded-xl border bg-white p-4 print:border-slate-300 print:rounded-none print:p-3 print:break-inside-avoid';
+  const sectionTitle = 'text-[11px] font-bold tracking-widest uppercase text-slate-500 flex items-center gap-1.5 mb-2 print:text-black';
+
+  return (
+    <article className="agenda-print bg-white border-2 border-slate-200 rounded-2xl p-6 notion-shadow print:shadow-none print:border-2 print:border-slate-900 print:rounded-none print:p-5 print:break-after-page">
+      {/* Header */}
+      <header className="flex items-center justify-between border-b-2 border-slate-900 pb-3 mb-4 print:pb-2 print:mb-3">
+        <div className="flex items-center gap-3">
+          {kid.avatar && (
+            <img
+              src={kid.avatar}
+              alt={kid.name}
+              className="w-12 h-12 rounded-full object-cover border-2 border-slate-200 print:hidden"
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          )}
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 print:text-slate-600">
+              {fmtDate(date)}
+            </p>
+            <h2 className="text-2xl font-black tracking-tight text-slate-900 leading-none">
+              {kid.name}'s Day
+              {student && <span className="text-slate-400 text-base font-bold ml-2">· {student.grade}</span>}
+            </h2>
+          </div>
+        </div>
+      </header>
+
+      {/* Content grid: 2 columns on screen, single column on print */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 print:grid-cols-1 print:gap-3">
+        {/* Events */}
+        <section className={sectionClass}>
+          <h3 className={sectionTitle}><CalendarDays size={12} /> Today's Schedule</h3>
+          {events.length === 0 ? (
+            <p className="text-sm text-slate-400 italic">No events today.</p>
+          ) : (
+            <ul className="space-y-1.5 text-sm">
+              {events.map(e => (
+                <li key={e.id} className="flex gap-2 leading-snug">
+                  <span className="font-mono text-[11px] font-bold text-slate-500 pt-0.5 w-14 flex-shrink-0">
+                    {fmtTime(e.start)}
+                  </span>
+                  <span className="text-slate-900">
+                    {e.title}
+                    {e.location && <span className="text-slate-400 text-xs"> · {e.location}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Schoolwork */}
+        <section className={sectionClass}>
+          <h3 className={sectionTitle}><GraduationCap size={12} /> School Today</h3>
+          {assignments.length === 0 ? (
+            <p className="text-sm text-slate-400 italic">No assignments due today.</p>
+          ) : (
+            <ul className="space-y-1.5 text-sm">
+              {assignments.map(a => (
+                <li key={a.id} className="flex items-start gap-2 leading-snug">
+                  <span className="w-3 h-3 border border-slate-400 rounded-sm mt-1 flex-shrink-0 print:border-black" />
+                  <span>
+                    <span className="font-semibold text-slate-900">{a.title}</span>
+                    <span className="text-slate-500 text-xs"> · {a.subject}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Chores */}
+        <section className={sectionClass}>
+          <h3 className={sectionTitle}><ListChecks size={12} /> Chores</h3>
+          {chores.length === 0 ? (
+            <p className="text-sm text-slate-400 italic">No chores today. 🎉</p>
+          ) : (
+            <ul className="space-y-1.5 text-sm">
+              {chores.map(c => (
+                <li key={c.id} className="flex items-start gap-2 leading-snug">
+                  <span className="w-3 h-3 border border-slate-400 rounded-sm mt-1 flex-shrink-0 print:border-black" />
+                  <span className="text-slate-900">{c.title}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Meals */}
+        <section className={sectionClass}>
+          <h3 className={sectionTitle}><ChefHat size={12} /> Meals</h3>
+          {mealsToday.length === 0 ? (
+            <p className="text-sm text-slate-400 italic">No meals planned.</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {mealsToday.map((m, i) => (
+                <li key={i} className="leading-snug">
+                  <span className="font-bold text-slate-500 text-xs w-16 inline-block">{m.mealType}</span>
+                  <span className="text-slate-900">{m.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {/* Joke + Fact */}
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 print:grid-cols-2 print:gap-3">
+        <div className="rounded-xl border bg-amber-50/50 p-4 print:bg-white print:border-slate-900 print:rounded-none">
+          <h3 className="text-[11px] font-bold tracking-widest uppercase text-amber-700 print:text-black flex items-center gap-1.5 mb-2">
+            <Quote size={12} /> Joke of the Day
+          </h3>
+          {extras?.joke ? (
+            <p className="text-sm text-slate-900 leading-relaxed">{extras.joke}</p>
+          ) : isGenerating ? (
+            <p className="text-sm text-slate-400 italic flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> Crafting a joke…</p>
+          ) : (
+            <p className="text-sm text-slate-400 italic">Tap "Regenerate" to get today's joke.</p>
+          )}
+        </div>
+        <div className="rounded-xl border bg-indigo-50/50 p-4 print:bg-white print:border-slate-900 print:rounded-none">
+          <h3 className="text-[11px] font-bold tracking-widest uppercase text-indigo-700 print:text-black flex items-center gap-1.5 mb-2">
+            <Lightbulb size={12} /> Fun Fact
+          </h3>
+          {extras?.fact ? (
+            <p className="text-sm text-slate-900 leading-relaxed">{extras.fact}</p>
+          ) : isGenerating ? (
+            <p className="text-sm text-slate-400 italic flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> Finding a fact…</p>
+          ) : (
+            <p className="text-sm text-slate-400 italic">Tap "Regenerate" to get today's fun fact.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Footer + actions (hidden on print) */}
+      <div className="mt-4 flex items-center justify-between print:hidden">
+        <p className="text-[11px] text-slate-400">
+          Generated by Family OS · {kid.name}
+        </p>
+        <button
+          onClick={onRegenerate}
+          disabled={isGenerating}
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
+        >
+          {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          Regenerate joke + fact
+        </button>
+      </div>
+
+      {error && (
+        <div className="mt-3 bg-red-50 border border-red-100 p-2 rounded-lg text-xs text-red-600 flex items-start gap-2 print:hidden">
+          <AlertCircle size={12} className="flex-shrink-0 mt-0.5" /> {error}
+        </div>
+      )}
+
+      {/* Print footer (only shown on print) */}
+      <div className="hidden print:block mt-3 pt-2 border-t border-slate-300 text-[9px] text-slate-500 text-center">
+        Family OS · Daily Agenda · {fmtDate(date)}
+      </div>
+    </article>
+  );
+};
+
+// ─── Main page ───────────────────────────────────────────────────────────────
+
+const DailyAgenda: React.FC<DailyAgendaProps> = ({ users, mealPlan, recipes }) => {
+  const { state } = useFamily();
+  const date = todayISO();
+
+  const kids = useMemo(() => users.filter(u => u.role === Role.CHILD), [users]);
+
+  const [cache, setCache] = useLocalStorage<AgendaCache>('family_os_daily_agenda', {});
+  const [generating, setGenerating] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string | null>>({});
+
+  // ── Per-kid filtered data ────────────────────────────────────────────────
+  const dataFor = (kid: User) => {
+    const student = studentForUser(kid, state.students);
+    const assignments = student
+      ? state.assignments.filter(a => a.studentId === student.id && a.dueDate === date && a.status !== Status.DONE)
+      : [];
+    const chores = state.chores.filter(c => c.assigneeId === kid.id && c.dueDate === date && c.status !== Status.DONE);
+    const events = state.events.filter(e => {
+      const attends = !e.attendeeIds || e.attendeeIds.length === 0 || e.attendeeIds.includes(kid.id);
+      return attends && e.start.startsWith(date);
+    });
+    const todaysMeals = mealPlan.filter(m => m.date === date);
+    const mealsToday = todaysMeals.map(m => {
+      const label = m.recipeId
+        ? (recipes.find(r => r.id === m.recipeId)?.name ?? 'Planned meal')
+        : (m.customMeal ?? 'Planned meal');
+      return { mealType: m.mealType, label };
+    });
+    return { student, assignments, chores, events, mealsToday };
+  };
+
+  // ── Generate joke + fact for one kid ─────────────────────────────────────
+  const generateFor = useCallback(async (kid: User) => {
+    const key = `${kid.id}|${date}`;
+    setGenerating(prev => ({ ...prev, [kid.id]: true }));
+    setErrors(prev => ({ ...prev, [kid.id]: null }));
+
+    try {
+      const student = studentForUser(kid, state.students);
+      const ageHint = student?.grade ?? 'school age';
+
+      const systemInstruction =
+        `You write daily one-pager content for children. Audience: a kid in ${ageHint}. ` +
+        `Output one short kid-friendly joke and one short "Fun Fact" that's age-appropriate, ` +
+        `surprising, and PG. Keep each under 30 words. Avoid repeating yesterday's pattern. ` +
+        `Be light, warm, and curious.`;
+
+      const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+          joke: { type: Type.STRING },
+          fact: { type: Type.STRING },
+        },
+        required: ['joke', 'fact'],
+      };
+
+      const parsed = await structured<{ joke?: string; fact?: string }>({
+        model: modelFor('briefing'),
+        systemInstruction,
+        responseSchema,
+        text: `Generate today's joke and fun fact for ${kid.name}.`,
+      });
+
+      const next: DailyExtras = {
+        joke: parsed.joke ?? 'No joke today!',
+        fact: parsed.fact ?? '',
+      };
+      setCache(prev => ({ ...prev, [key]: next }));
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof AIConfigError
+        ? 'Need an API key. Add one in Settings → AI Providers.'
+        : err instanceof Error ? err.message : 'Could not generate today\'s extras.';
+      setErrors(prev => ({ ...prev, [kid.id]: msg }));
+    } finally {
+      setGenerating(prev => ({ ...prev, [kid.id]: false }));
+    }
+  }, [date, state.students, setCache]);
+
+  // ── On first load: generate for any kid missing today's cache ────────────
+  useEffect(() => {
+    kids.forEach(kid => {
+      const key = `${kid.id}|${date}`;
+      if (!cache[key]) generateFor(kid);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePrint = () => window.print();
+
+  return (
+    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+      {/* Print-specific styles */}
+      <style>{`
+        @media print {
+          @page { size: letter; margin: 0.5in; }
+          body { background: white !important; }
+          /* Hide app chrome */
+          aside, header.md\\:hidden, nav, .print\\:hidden { display: none !important; }
+          main { padding: 0 !important; overflow: visible !important; }
+          .max-w-5xl { max-width: 100% !important; padding: 0 !important; }
+          .agenda-print { page-break-after: always; }
+          .agenda-print:last-child { page-break-after: auto; }
+        }
+      `}</style>
+
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 print:hidden">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <Sun size={28} className="text-amber-500" />
+            Daily Agenda
+          </h1>
+          <p className="text-slate-500 mt-1">
+            A printable one-pager for each kid — today's plan, meals, a joke, and a fun fact.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => kids.forEach(generateFor)}
+            disabled={Object.values(generating).some(Boolean)}
+            className="flex items-center gap-2 bg-white border text-slate-600 px-4 py-2 rounded-lg font-semibold hover:border-indigo-300 hover:text-indigo-600 transition-colors text-sm disabled:opacity-50"
+          >
+            <Sparkles size={16} /> Regenerate all
+          </button>
+          <button
+            onClick={handlePrint}
+            disabled={kids.length === 0}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm text-sm disabled:opacity-50"
+          >
+            <Printer size={16} /> Print all
+          </button>
+        </div>
+      </header>
+
+      {kids.length === 0 ? (
+        <div className="bg-white border-2 border-dashed rounded-2xl p-16 text-center print:hidden">
+          <p className="text-slate-400 font-medium">No kids in this family workspace yet.</p>
+          <p className="text-slate-400 text-sm mt-1">Add a child user to start generating daily agendas.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {kids.map(kid => {
+            const key = `${kid.id}|${date}`;
+            const data = dataFor(kid);
+            return (
+              <KidAgenda
+                key={kid.id}
+                kid={kid}
+                student={data.student}
+                date={date}
+                assignments={data.assignments}
+                chores={data.chores}
+                events={data.events}
+                mealsToday={data.mealsToday}
+                extras={cache[key] ?? null}
+                isGenerating={!!generating[kid.id]}
+                error={errors[kid.id] ?? null}
+                onRegenerate={() => generateFor(kid)}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default DailyAgenda;

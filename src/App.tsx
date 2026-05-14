@@ -72,6 +72,7 @@ import Allowance         from './pages/Allowance';
 import Pinboard          from './pages/Pinboard';
 import Documents         from './pages/Documents';
 import FamilyCoach       from './pages/FamilyCoach';
+import DailyAgenda       from './pages/DailyAgenda';
 import EmailIntelligence from './pages/EmailIntelligence';
 import Wellness          from './pages/Wellness';
 import Goals            from './pages/Goals';
@@ -95,6 +96,7 @@ export const MODULE_COMPONENTS: Record<string, ComponentType<any>> = {
   'pinboard':            Pinboard,
   'documents':           Documents,
   'family-coach':        FamilyCoach,
+  'daily-agenda':        DailyAgenda,
   'email-intelligence':  EmailIntelligence,
   'wellness':            Wellness,
   'goals':               Goals,
@@ -318,7 +320,7 @@ const AppInner: React.FC = () => {
       'family_os_profile', 'family_os_recipes', 'family_os_meal_plan',
       'family_os_shopping', 'family_os_rewards', 'family_os_reward_txns',
       'family_os_notes', 'family_os_documents', 'family_os_ai_doc_access', 'family_os_coach_chat',
-      'family_os_ai_keys', 'family_os_ai_prefs',
+      'family_os_ai_keys', 'family_os_ai_prefs', 'family_os_daily_agenda',
       'family_os_action_items',
       'family_os_behavior_updates', 'family_os_announcements',
       'family_os_classified_emails', 'family_os_email_config', 'family_os_last_scan',
@@ -417,6 +419,8 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
         return { documents, setDocuments, aiDocAccess };
       case 'family-coach':
         return { documents, aiDocAccess, onEnableAiDocAccess: () => setAiDocAccess(true) };
+      case 'daily-agenda':
+        return { users: activeFamilyUsers, mealPlan, recipes };
       case 'email-intelligence':
         return {
           actionItems, behaviorUpdates, announcements, classifiedEmails,

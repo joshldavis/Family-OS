@@ -19,6 +19,7 @@ import wellness         from './definitions/wellness';
 import goals           from './definitions/goals';
 import health          from './definitions/health';
 import familyCoach     from './definitions/familyCoach';
+import dailyAgenda     from './definitions/dailyAgenda';
 
 /**
  * Canonical ordered list of all modules.
@@ -37,6 +38,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   shopping,
   allowance,
   pinboard,
+  dailyAgenda,
   documents,
   familyCoach,
   emailIntelligence,
