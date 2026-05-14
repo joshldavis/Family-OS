@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import { Link } from 'react-router-dom';
 import { FamilyDocument } from '../types';
 import useLocalStorage from '../hooks/useLocalStorage';
+import { chat, modelFor, AIConfigError } from '../services/ai';
 import {
   Sparkles, Send, Loader2, Bot, User as UserIcon, MessagesSquare,
   FileText, ScanLine, AlertCircle, Trash2, Lock, ShieldCheck,
@@ -86,12 +86,6 @@ const FamilyCoach: React.FC<FamilyCoachProps> = ({ documents, aiDocAccess = fals
     setIsThinking(true);
 
     try {
-      const apiKey = import.meta.env.VITE_API_KEY;
-      if (!apiKey) {
-        throw new Error('Gemini API key is not configured. Add VITE_API_KEY to your .env file.');
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
       const docContext = buildDocContext(documents);
 
       const today = new Date().toISOString().split('T')[0];
@@ -107,22 +101,18 @@ const FamilyCoach: React.FC<FamilyCoachProps> = ({ documents, aiDocAccess = fals
           : 'NO DOCUMENTS HAVE BEEN SCANNED YET. Tell the user to use Magic Scan in the Document Vault to add documents you can read.',
       ].join('\n');
 
-      // Build a short chat history (last 6 turns) so the model has continuity
+      // Pass the last 6 turns so the model has continuity.
       const history = messages.slice(-6).map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }],
+        role: m.role,
+        content: m.content,
       }));
 
-      const result = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [
-          ...history,
-          { role: 'user', parts: [{ text }] },
-        ],
-        config: { systemInstruction },
-      });
-
-      const answer = (result.text ?? '').trim() || 'I wasn\'t able to come up with an answer for that one.';
+      const answer = (await chat(text, {
+        model: modelFor('coach'),
+        systemInstruction,
+        history,
+        maxOutputTokens: 1024,
+      })) || 'I wasn\'t able to come up with an answer for that one.';
 
       // Heuristic: detect which docs got referenced by name in the response
       const referencedIds = readableDocs
@@ -139,8 +129,12 @@ const FamilyCoach: React.FC<FamilyCoachProps> = ({ documents, aiDocAccess = fals
       setMessages(prev => [...prev, assistantMsg]);
     } catch (err) {
       console.error(err);
-      const msg = err instanceof Error ? err.message : 'Something went wrong talking to Gemini.';
-      setError(msg);
+      if (err instanceof AIConfigError) {
+        setError('No API key for the Coach\'s model. Add one in Settings → AI Providers.');
+      } else {
+        const msg = err instanceof Error ? err.message : 'Something went wrong.';
+        setError(msg);
+      }
       // Roll back the user message? No — keep it visible so user can retry.
     } finally {
       setIsThinking(false);

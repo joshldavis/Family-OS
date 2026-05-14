@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { GoogleGenAI, Type } from '@google/genai';
 import { FamilyDocument, DocumentCategory } from '../types';
+import { structured, modelFor, AIConfigError, Type } from '../services/ai';
 import { FolderOpen, Plus, X, AlertTriangle, CheckCircle2, Trash2, Calendar, Search, Sparkles, Upload, Loader2, AlertCircle, ScanLine, FileText, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useFamily } from '../FamilyContext';
@@ -144,14 +144,6 @@ const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments, aiDocAcc
     setScanError(null);
 
     try {
-      const apiKey = import.meta.env.VITE_API_KEY;
-      if (!apiKey) {
-        setScanError('Gemini API key is not configured. Add VITE_API_KEY to your .env file.');
-        setIsScanning(false);
-        return;
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
       const today = new Date().toISOString().split('T')[0];
 
       const systemInstruction =
@@ -175,26 +167,19 @@ const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments, aiDocAcc
         required: ['name', 'category', 'extractedText'],
       };
 
-      const result = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [{ parts: [
-          { inlineData: content },
-          { text: 'Extract structured family-document data from this image. Return JSON.' },
-        ] }],
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema,
-          systemInstruction,
-        },
-      });
-
-      const parsed = JSON.parse(result.text || '{}') as {
+      const parsed = await structured<{
         name?: string;
         category?: string;
         expiryDate?: string;
         notes?: string;
         extractedText?: string;
-      };
+      }>({
+        model: modelFor('scan'),
+        systemInstruction,
+        responseSchema,
+        image: content,
+        text: 'Extract structured family-document data from this image. Return JSON.',
+      });
 
       const normalizedCategory: DocumentCategory =
         (ALL_CATEGORIES as string[]).includes(parsed.category ?? '')
@@ -227,7 +212,11 @@ const Documents: React.FC<DocumentsProps> = ({ documents, setDocuments, aiDocAcc
       successTimeoutRef.current = setTimeout(() => setScanSuccess(null), 4000);
     } catch (err) {
       console.error(err);
-      setScanError('Could not read this document. Try a clearer photo or a different file.');
+      if (err instanceof AIConfigError) {
+        setScanError('Magic Scan needs an API key. Add one in Settings → AI Providers.');
+      } else {
+        setScanError('Could not read this document. Try a clearer photo or a different file.');
+      }
     } finally {
       setIsScanning(false);
     }

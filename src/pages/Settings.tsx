@@ -26,12 +26,20 @@ import {
   Zap,
   Sparkles,
   MessagesSquare,
+  Eye,
+  EyeOff,
+  ScanLine,
 } from 'lucide-react';
 import { DEFAULT_GMAIL_CONFIG, type GmailSyncConfig } from '../services/gmailSync';
 import { DEFAULT_CLASSROOM_CONFIG, type ClassroomSyncConfig } from '../services/classroomSync';
 import { DEFAULT_GCAL_CONFIG, type GoogleCalendarConfig } from '../services/googleCalendar';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { type NotificationSettings } from '../hooks/useNotifications';
+import {
+  AVAILABLE_MODELS,
+  loadKeys, saveKeys, loadPreferences, savePreferences,
+  type AIFeature, type AIProvider,
+} from '../services/ai';
 
 interface SettingsProps {
   family: Family;
@@ -83,6 +91,59 @@ const Settings: React.FC<SettingsProps> = ({
   const [canvasUrl, setCanvasUrl] = useState('');
   const [canvasKey, setCanvasKey] = useState('');
   const [requestingNotif, setRequestingNotif] = useState(false);
+
+  // ── AI provider keys + per-feature model preferences ─────────────────────
+  const [aiKeys, setAiKeys] = useState(() => loadKeys());
+  const [aiPrefs, setAiPrefs] = useState(() => loadPreferences());
+  const [showKey, setShowKey] = useState<Record<AIProvider, boolean>>({ gemini: false, claude: false });
+
+  const updateApiKey = (provider: AIProvider, value: string) => {
+    const next = { ...aiKeys, [provider]: value };
+    setAiKeys(next);
+    saveKeys(next);
+  };
+
+  const updateFeatureModel = (feature: AIFeature, modelId: string) => {
+    const next = {
+      ...aiPrefs,
+      featureModels: { ...aiPrefs.featureModels, [feature]: modelId },
+    };
+    setAiPrefs(next);
+    savePreferences(next);
+  };
+
+  const FEATURE_LABELS: Record<AIFeature, { label: string; description: string; icon: React.ReactNode }> = {
+    briefing: {
+      label: 'Family Briefing',
+      description: 'The morning summary on your Dashboard.',
+      icon: <Sparkles size={14} className="text-indigo-500" />,
+    },
+    coach: {
+      label: 'Family Coach',
+      description: 'Chat with an AI that has read your documents.',
+      icon: <MessagesSquare size={14} className="text-indigo-500" />,
+    },
+    scan: {
+      label: 'Magic Scan',
+      description: 'OCR + auto-fill for the Document Vault.',
+      icon: <ScanLine size={14} className="text-indigo-500" />,
+    },
+    chat: {
+      label: 'AI Chat (global)',
+      description: 'The floating AI chat in the bottom-right.',
+      icon: <MessagesSquare size={14} className="text-indigo-500" />,
+    },
+    insights: {
+      label: 'Insights Report',
+      description: 'AI-generated weekly insights.',
+      icon: <Zap size={14} className="text-indigo-500" />,
+    },
+  };
+
+  const PROVIDER_INFO: Record<AIProvider, { name: string; placeholder: string; helpUrl: string; symbol: string }> = {
+    gemini: { name: 'Google Gemini', placeholder: 'AIza...', helpUrl: 'https://aistudio.google.com/app/apikey', symbol: '◆' },
+    claude: { name: 'Anthropic Claude', placeholder: 'sk-ant-...', helpUrl: 'https://console.anthropic.com/settings/keys', symbol: '✦' },
+  };
 
   const handleRequestNotifPermission = async () => {
     if (!onRequestNotifPermission) return;
@@ -467,60 +528,133 @@ const Settings: React.FC<SettingsProps> = ({
             </div>
           </section>
 
-          {/* AI Configuration */}
+          {/* AI Providers (BYOK) */}
+          <section className="bg-white border rounded-2xl notion-shadow overflow-hidden">
+            <div className="p-6 border-b bg-slate-50/50">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                <Key size={18} className="text-violet-500" />
+                AI Providers
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Bring your own keys. They're stored locally in your browser and never leave your device except to call the provider directly.
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              {(['gemini', 'claude'] as AIProvider[]).map(provider => {
+                const info = PROVIDER_INFO[provider];
+                const envFallback = provider === 'gemini'
+                  ? !!import.meta.env.VITE_API_KEY
+                  : !!import.meta.env.VITE_ANTHROPIC_API_KEY;
+                const userKey = aiKeys[provider] ?? '';
+                const hasAnyKey = !!userKey || envFallback;
+                return (
+                  <div key={provider} className={`p-4 rounded-xl border ${hasAnyKey ? 'bg-emerald-50/40 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{info.symbol}</span>
+                        <p className="font-semibold text-slate-900 text-sm">{info.name}</p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${hasAnyKey ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                        {hasAnyKey ? <><CheckCircle2 size={10} /> Connected</> : 'Not configured'}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <input
+                          type={showKey[provider] ? 'text' : 'password'}
+                          value={userKey}
+                          onChange={e => updateApiKey(provider, e.target.value)}
+                          placeholder={info.placeholder}
+                          className="w-full pr-9 pl-3 py-2 text-xs border rounded-lg bg-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowKey(prev => ({ ...prev, [provider]: !prev[provider] }))}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          aria-label={showKey[provider] ? 'Hide key' : 'Show key'}
+                        >
+                          {showKey[provider] ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                      {userKey && (
+                        <button
+                          onClick={() => updateApiKey(provider, '')}
+                          className="px-3 py-2 text-xs font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 border rounded-lg transition-colors"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between mt-2 text-[11px]">
+                      <a href={info.helpUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">
+                        <ExternalLink size={10} /> Get a key
+                      </a>
+                      {!userKey && envFallback && (
+                        <span className="text-slate-400">Using .env fallback</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <p className="text-[11px] text-slate-400 pt-1 leading-relaxed flex items-start gap-1.5">
+                <Lock size={11} className="flex-shrink-0 mt-0.5" />
+                Keys are stored in localStorage. Keep them private — anyone with access to this browser profile can read them.
+              </p>
+            </div>
+          </section>
+
+          {/* Model Picker */}
           <section className="bg-white border rounded-2xl notion-shadow overflow-hidden">
             <div className="p-6 border-b bg-slate-50/50">
               <h3 className="font-bold text-slate-900 flex items-center gap-2">
                 <Zap size={18} className="text-violet-500" />
-                AI Configuration
+                AI Models
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Family OS uses two AI providers. Configure both keys in your <code className="bg-slate-100 px-1 rounded text-[10px]">.env</code> file for full feature coverage.
+                Pick which model powers each feature. Models from providers without an API key are disabled.
               </p>
             </div>
             <div className="p-6 space-y-4">
-              {/* Claude */}
-              {(() => {
-                const hasKey = !!import.meta.env.VITE_ANTHROPIC_API_KEY;
+              {(Object.keys(FEATURE_LABELS) as AIFeature[]).map(feature => {
+                const label = FEATURE_LABELS[feature];
+                const currentId = aiPrefs.featureModels[feature];
                 return (
-                  <div className={`p-4 rounded-xl border ${hasKey ? 'bg-violet-50 border-violet-100' : 'bg-slate-50 border-slate-100'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">✦</span>
-                        <p className="font-semibold text-slate-900 text-sm">Claude (Anthropic)</p>
+                  <div key={feature} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-3 bg-slate-50/50 rounded-xl border">
+                    <div className="flex items-start gap-2 flex-1 min-w-0">
+                      <div className="mt-0.5">{label.icon}</div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{label.label}</p>
+                        <p className="text-[11px] text-slate-500">{label.description}</p>
                       </div>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${hasKey ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>
-                        {hasKey ? <><CheckCircle2 size={11} /> Configured</> : '⚠ Missing'}
-                      </span>
                     </div>
-                    <p className="text-xs text-slate-500 mb-2">Powers: Onboarding assistant · Email Intelligence</p>
-                    <code className="text-[10px] text-slate-400 bg-white border rounded px-2 py-0.5 block">VITE_ANTHROPIC_API_KEY=sk-ant-...</code>
+                    <select
+                      value={currentId ?? ''}
+                      onChange={e => updateFeatureModel(feature, e.target.value)}
+                      className="text-xs border rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[260px]"
+                    >
+                      <option value="">Default (recommended)</option>
+                      {AVAILABLE_MODELS.map(model => {
+                        const providerKey = model.provider === 'gemini'
+                          ? (aiKeys.gemini || import.meta.env.VITE_API_KEY)
+                          : (aiKeys.claude || import.meta.env.VITE_ANTHROPIC_API_KEY);
+                        const disabled = !providerKey;
+                        const cost = '$'.repeat(model.costHint);
+                        return (
+                          <option key={model.id} value={model.id} disabled={disabled}>
+                            {model.displayName} · {model.tier} · {cost}{disabled ? ' (no key)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
                   </div>
                 );
-              })()}
+              })}
 
-              {/* Gemini */}
-              {(() => {
-                const hasKey = !!import.meta.env.VITE_API_KEY;
-                return (
-                  <div className={`p-4 rounded-xl border ${hasKey ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">◆</span>
-                        <p className="font-semibold text-slate-900 text-sm">Gemini (Google)</p>
-                      </div>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${hasKey ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>
-                        {hasKey ? <><CheckCircle2 size={11} /> Configured</> : '⚠ Missing'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mb-2">Powers: AI Chat · Family Briefing · Document Scan · Family Coach · Chore suggestions · Meal planning · Calendar AI · Insights</p>
-                    <code className="text-[10px] text-slate-400 bg-white border rounded px-2 py-0.5 block">VITE_API_KEY=AIza...</code>
-                  </div>
-                );
-              })()}
-
-              <p className="text-xs text-slate-400 pt-1">
-                💡 Tip: Add both keys to Vercel → Project Settings → Environment Variables, then redeploy.
+              <p className="text-[11px] text-slate-400 pt-1 leading-relaxed">
+                Cost indicators ($ to $$$$$) are rough provider-pricing ranks, not exact figures. Default uses Gemini 2.0 Flash — cheap, fast, and capable enough for most family tasks.
               </p>
             </div>
           </section>

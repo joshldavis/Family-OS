@@ -1,11 +1,10 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 import { useFamily } from '../FamilyContext';
+import { chat, modelFor, AIConfigError } from '../services/ai';
 
 const ONE_HOUR_MS = 3_600_000;
-const MODEL = 'gemini-2.0-flash';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -24,12 +23,6 @@ const FamilyBriefing: React.FC = () => {
   };
 
   const generateBriefing = useCallback(async () => {
-    const apiKey = import.meta.env.VITE_API_KEY as string | undefined;
-    if (!apiKey) {
-      setError('AI briefings need a Gemini API key. Add VITE_API_KEY to your .env to enable them.');
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
@@ -59,15 +52,10 @@ Family context:
 Write the briefing now:`.trim();
 
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      const result = await ai.models.generateContent({
-        model: MODEL,
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 512 },
+      const text = await chat(prompt, {
+        model: modelFor('briefing'),
+        maxOutputTokens: 512,
       });
-
-      const text = (result.text ?? '').trim();
-      if (!text) throw new Error('Empty response from Gemini.');
 
       setBriefing(text);
       dispatch({
@@ -75,8 +63,12 @@ Write the briefing now:`.trim();
         payload: { timestamp: new Date().toISOString(), text },
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to generate briefing.';
-      setError(msg);
+      if (err instanceof AIConfigError) {
+        setError('AI briefings need an API key. Add one in Settings → AI Providers.');
+      } else {
+        const msg = err instanceof Error ? err.message : 'Failed to generate briefing.';
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }

@@ -317,7 +317,9 @@ const AppInner: React.FC = () => {
     [
       'family_os_profile', 'family_os_recipes', 'family_os_meal_plan',
       'family_os_shopping', 'family_os_rewards', 'family_os_reward_txns',
-      'family_os_notes', 'family_os_documents', 'family_os_ai_doc_access', 'family_os_coach_chat', 'family_os_action_items',
+      'family_os_notes', 'family_os_documents', 'family_os_ai_doc_access', 'family_os_coach_chat',
+      'family_os_ai_keys', 'family_os_ai_prefs',
+      'family_os_action_items',
       'family_os_behavior_updates', 'family_os_announcements',
       'family_os_classified_emails', 'family_os_email_config', 'family_os_last_scan',
       'family_os_habits', 'family_os_habit_checkins', 'family_os_family_goals', 'family_os_health_log',
