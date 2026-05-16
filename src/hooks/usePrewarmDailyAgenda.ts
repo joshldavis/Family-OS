@@ -32,6 +32,8 @@ export interface PrewarmStatus {
   generated: number;
   /** Number of kids whose extras were already cached. */
   skipped: number;
+  /** Number of kids whose extras were pulled from Supabase (cron-generated). */
+  fromCron: number;
   /** Number of per-kid failures during this pass. */
   errors: number;
   /** Date (YYYY-MM-DD) of the most recent cache entry, or null. */
@@ -43,6 +45,8 @@ interface Options {
   enabled?: boolean;
   /** Only run after the user is logged in. */
   loggedIn?: boolean;
+  /** Family ID for Supabase fetch + push. Omit to disable server sync. */
+  familyId?: string;
 }
 
 export function usePrewarmDailyAgenda(
@@ -52,12 +56,13 @@ export function usePrewarmDailyAgenda(
   setCache: React.Dispatch<React.SetStateAction<AgendaCache>>,
   opts: Options = {},
 ): PrewarmStatus {
-  const { enabled = true, loggedIn = true } = opts;
+  const { enabled = true, loggedIn = true, familyId } = opts;
   const [status, setStatus] = useState<PrewarmStatus>({
     ranToday: false,
     running: false,
     generated: 0,
     skipped: 0,
+    fromCron: 0,
     errors: 0,
     lastDate: lastPrewarmDate(cache),
   });
@@ -74,29 +79,27 @@ export function usePrewarmDailyAgenda(
     let cancelled = false;
     const today = todayISO();
 
-    // Quick check: if every child user already has a cache entry for today,
-    // there's nothing to do — flip ranToday and skip the work.
-    const kids = users.filter(u => u.role === 'Child');
-    const allCached = kids.length > 0 && kids.every(k => !!cache[`${k.id}|${today}`]);
-    if (allCached) {
-      setStatus(s => ({ ...s, ranToday: true, skipped: kids.length, lastDate: today }));
-      return;
-    }
-
     setStatus(s => ({ ...s, running: true }));
 
     (async () => {
       try {
-        const result = await prewarmAgendaCache(users, students, cache, next => {
-          if (cancelled) return;
-          setCache(next);
-        });
+        const result = await prewarmAgendaCache(
+          users,
+          students,
+          cache,
+          next => {
+            if (cancelled) return;
+            setCache(next);
+          },
+          familyId,
+        );
         if (cancelled) return;
         setStatus({
           ranToday: true,
           running: false,
           generated: result.generated,
           skipped: result.skipped,
+          fromCron: result.fromCron,
           errors: result.errors,
           lastDate: today,
         });

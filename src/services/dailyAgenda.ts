@@ -6,10 +6,13 @@
 
 import { User, Role, Student } from '../types';
 import { structured, modelFor, AIConfigError, Type } from './ai';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export interface DailyExtras {
   joke: string;
   fact: string;
+  /** Where this entry came from — surfaces the 'Generated overnight' badge. */
+  source?: 'cron' | 'client';
 }
 
 export interface AgendaCache {
@@ -78,7 +81,72 @@ export async function generateDailyExtras(
   return {
     joke: parsed.joke ?? 'No joke today!',
     fact: parsed.fact ?? '',
+    source: 'client',
   };
+}
+
+/**
+ * Fetch overnight-generated agendas from Supabase for a given family and date.
+ * Returns a partial cache map keyed `${kidId}|${date}`. No-op (empty map) when
+ * Supabase isn't configured.
+ */
+export async function fetchAgendasFromSupabase(
+  familyId: string,
+  date: string,
+): Promise<AgendaCache> {
+  if (!isSupabaseConfigured) return {};
+
+  const { data, error } = await supabase
+    .from('daily_agendas')
+    .select('kid_id, joke, fact, generated_by')
+    .eq('family_id', familyId)
+    .eq('agenda_date', date);
+
+  if (error) {
+    console.warn('[dailyAgenda] supabase fetch failed:', error.message);
+    return {};
+  }
+
+  const out: AgendaCache = {};
+  for (const row of data ?? []) {
+    out[cacheKey(row.kid_id as string, date)] = {
+      joke: (row.joke as string) ?? '',
+      fact: (row.fact as string) ?? '',
+      source: ((row.generated_by as string) === 'cron' ? 'cron' : 'client'),
+    };
+  }
+  return out;
+}
+
+/**
+ * Upsert a client-generated agenda back to Supabase so all family members'
+ * devices see it. Silently no-ops if Supabase isn't configured.
+ */
+export async function pushAgendaToSupabase(
+  familyId: string,
+  kidId: string,
+  date: string,
+  extras: DailyExtras,
+): Promise<void> {
+  if (!isSupabaseConfigured) return;
+
+  const { error } = await supabase
+    .from('daily_agendas')
+    .upsert(
+      {
+        family_id: familyId,
+        kid_id: kidId,
+        agenda_date: date,
+        joke: extras.joke,
+        fact: extras.fact,
+        generated_at: new Date().toISOString(),
+        generated_by: extras.source ?? 'client',
+      },
+      { onConflict: 'family_id,kid_id,agenda_date' },
+    );
+  if (error) {
+    console.warn('[dailyAgenda] supabase upsert failed:', error.message);
+  }
 }
 
 /**
@@ -99,16 +167,37 @@ export async function prewarmAgendaCache(
   students: Student[],
   current: AgendaCache,
   onUpdate: (next: AgendaCache) => void,
-): Promise<{ generated: number; skipped: number; errors: number }> {
+  familyId?: string,
+): Promise<{ generated: number; skipped: number; errors: number; fromCron: number }> {
   const date = todayISO();
   const kids = users.filter(u => u.role === Role.CHILD);
   let generated = 0;
   let skipped = 0;
   let errors = 0;
+  let fromCron = 0;
   let working = current;
 
+  // ── Step 1: pull any overnight-generated rows from Supabase ────────────
+  // This is the fast path — no AI calls, no key needed locally.
+  if (familyId && isSupabaseConfigured) {
+    try {
+      const serverCache = await fetchAgendasFromSupabase(familyId, date);
+      const serverKeys = Object.keys(serverCache);
+      if (serverKeys.length > 0) {
+        working = { ...working, ...serverCache };
+        onUpdate(working);
+        fromCron = serverKeys.filter(k => serverCache[k].source === 'cron').length;
+      }
+    } catch (err) {
+      console.warn('[DailyAgenda] supabase prewarm fetch failed:', err);
+    }
+  }
+
+  // ── Step 2: client-side fallback for any kid still missing today ───────
   if (!hasAnyAIKey()) {
-    return { generated, skipped: kids.length, errors };
+    // Nothing more we can do locally — return what we got from the server.
+    const missing = kids.filter(k => !working[cacheKey(k.id, date)]).length;
+    return { generated, skipped: kids.length - missing, errors, fromCron };
   }
 
   for (const kid of kids) {
@@ -120,17 +209,20 @@ export async function prewarmAgendaCache(
       working = { ...working, [key]: extras };
       onUpdate(working);
       generated++;
+      // Best-effort: push to Supabase so other devices in the family see it.
+      if (familyId) {
+        pushAgendaToSupabase(familyId, kid.id, date, extras).catch(() => undefined);
+      }
     } catch (err) {
-      // Swallow per-kid errors so one bad call doesn't block the others.
-      // AIConfigError is a no-key situation we already filtered above, but
-      // could happen mid-run if a key gets cleared.
-      if (err instanceof AIConfigError) return { generated, skipped, errors: errors + (kids.length - generated - skipped) };
+      if (err instanceof AIConfigError) {
+        return { generated, skipped, errors: errors + (kids.length - generated - skipped), fromCron };
+      }
       console.warn(`[DailyAgenda] prewarm failed for ${kid.name}:`, err);
       errors++;
     }
   }
 
-  return { generated, skipped, errors };
+  return { generated, skipped, errors, fromCron };
 }
 
 /** Returns the date (YYYY-MM-DD) of the most recent cache entry for any kid, or null. */

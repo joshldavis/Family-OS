@@ -368,11 +368,15 @@ const AppInner: React.FC = () => {
   // missing kid-day joke/fact is generated in the background before they
   // navigate to /agenda or hit Print.
   const prewarmStatus = usePrewarmDailyAgenda(
-    isEnabled('daily-agenda') ? state.students.length ? (profile?.users ?? MOCK_USERS) : [] : [],
+    isEnabled('daily-agenda') ? (profile?.users ?? MOCK_USERS) : [],
     state.students,
     agendaCache,
     setAgendaCache,
-    { enabled: isEnabled('daily-agenda'), loggedIn: !!state.currentUser },
+    {
+      enabled: isEnabled('daily-agenda'),
+      loggedIn: !!state.currentUser,
+      familyId: activeFamily.id,
+    },
   );
 
   /** Strip extractedText from every doc — used when the user turns AI Document Access off. */
@@ -443,6 +447,8 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
           agendaCache,
           setAgendaCache,
           prewarmRanToday: prewarmStatus.ranToday,
+          fromCron: prewarmStatus.fromCron,
+          familyId: activeFamily.id,
         };
       case 'email-intelligence':
         return {

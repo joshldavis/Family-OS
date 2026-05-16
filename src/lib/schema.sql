@@ -183,6 +183,42 @@ begin
 end $$;
 
 -- ============================================================
+-- Daily Agendas — server-generated joke + fact per kid per day
+-- Populated by the Vercel cron at /api/cron/daily-agenda
+-- ============================================================
+create table if not exists daily_agendas (
+  id            uuid primary key default uuid_generate_v4(),
+  family_id     text references families(id) on delete cascade not null,
+  kid_id        text not null,            -- profile.id (User.id) of the child
+  agenda_date   date not null,
+  joke          text,
+  fact          text,
+  generated_at  timestamptz default now(),
+  generated_by  text default 'cron'       -- 'cron' or 'client'
+);
+
+create unique index if not exists daily_agendas_family_kid_date_idx
+  on daily_agendas (family_id, kid_id, agenda_date);
+
+create index if not exists daily_agendas_date_idx
+  on daily_agendas (agenda_date);
+
+alter table daily_agendas enable row level security;
+
+-- Families can read their own agendas
+create policy "daily_agendas: read own family" on daily_agendas
+  for select using (family_id = get_my_family_id());
+
+-- Clients can write their own agendas (for the fallback client-generation path)
+create policy "daily_agendas: insert own family" on daily_agendas
+  for insert with check (family_id = get_my_family_id());
+
+create policy "daily_agendas: update own family" on daily_agendas
+  for update using (family_id = get_my_family_id());
+
+-- Note: the cron endpoint uses the service role key, which bypasses RLS.
+
+-- ============================================================
 -- Real-time: enable publications for live sync
 -- ============================================================
 alter publication supabase_realtime add table assignments;
@@ -191,3 +227,4 @@ alter publication supabase_realtime add table events;
 alter publication supabase_realtime add table transactions;
 alter publication supabase_realtime add table budgets;
 alter publication supabase_realtime add table savings_goals;
+alter publication supabase_realtime add table daily_agendas;
