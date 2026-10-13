@@ -58,10 +58,15 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const stored = loadFromStorage();
     const base = stored ?? getDefaultEnabledModules();
     const coreIds = MODULE_REGISTRY.filter(m => !m.canDisable).map(m => m.id);
-    // Any new module added with defaultEnabled:true should auto-activate even
-    // for users who already have stored preferences (first-launch auto-opt-in).
+    // Legacy mode retains the existing auto-opt-in behavior when the Operating
+    // Modes feature is OFF. When modes are ON, existing households keep their
+    // explicit module choices; newly registered default modules are not forced
+    // into their original General Family view.
     const newDefaultIds = MODULE_REGISTRY
-      .filter(m => m.defaultEnabled && m.canDisable && stored !== null && !base.includes(m.id))
+      .filter(m => (
+        import.meta.env.VITE_FAMILY_OPERATING_MODES !== 'true' &&
+        m.defaultEnabled && m.canDisable && stored !== null && !base.includes(m.id)
+      ))
       .map(m => m.id);
     const merged = Array.from(new Set([...coreIds, ...base, ...newDefaultIds]));
     return merged;
