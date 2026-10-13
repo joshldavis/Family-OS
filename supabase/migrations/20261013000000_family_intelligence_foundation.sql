@@ -85,8 +85,8 @@ create index if not exists family_links_outgoing_idx
 create index if not exists family_links_incoming_idx
   on public.family_entity_links(family_id, to_entity_id, relationship);
 
--- Append-only during normal operation: corrections are new events, not UPDATE.
--- Explicit privileged hard-deletion remains possible for family data erasure.
+-- Append-only CONTRACT during normal operation: corrections are new events,
+-- not UPDATE. Privileged erasure and FK cleanup must remain possible.
 create table if not exists public.family_activity_events (
   id                  uuid primary key default gen_random_uuid(),
   family_id           text not null references public.families(id) on delete cascade,
@@ -116,19 +116,9 @@ create index if not exists family_events_timeline_idx
 create index if not exists family_events_subject_idx
   on public.family_activity_events(family_id, subject_entity_id, occurred_at desc);
 
-create or replace function public.family_intelligence_prevent_event_mutation()
-returns trigger
-language plpgsql
-as $$
-begin
-  raise exception 'Family activity events cannot be updated. Record a correction event instead.';
-end;
-$$;
-
-drop trigger if exists family_activity_events_no_mutation on public.family_activity_events;
-create trigger family_activity_events_no_mutation
-before update on public.family_activity_events
-for each row execute function public.family_intelligence_prevent_event_mutation();
+-- No client UPDATE policy exists. A future trusted gateway will enforce
+-- append-only semantics for normal activity, while privileged deletion and
+-- FK cleanup remain available for consent withdrawal/erasure.
 
 -- Observation is distinct from diagnosis or inferred causal explanation.
 -- Subject/source/event links are tenant-bound. Collection requires opt-in.
