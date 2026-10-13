@@ -88,3 +88,20 @@ test('default policy rejects unknown capability values at runtime', () => {
   });
   assert.equal(result.reason, 'insufficient_role');
 });
+
+test('child and caregiver have no default access to household tasks or school content', () => {
+  for (const role of ['child', 'caregiver'] as const) {
+    const result = authorizeHouseholdOperation({ ...familyA, role }, {
+      ...request, capability: 'tasks.read',
+    });
+    assert.equal(result.allow, false);
+  }
+});
+
+test('missing child-scope data fails closed', () => {
+  const result = authorizeHouseholdOperation({
+    ...familyA,
+    permittedChildIds: undefined as unknown as readonly string[],
+  }, { ...request, capability: 'support.read', childId: 'child-A' });
+  assert.deepEqual(result, { allow: false, reason: 'child_scope_required' });
+});
