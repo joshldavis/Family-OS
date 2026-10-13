@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'src/intelligence/**'
+      - 'src/pages/EmailIntelligence.tsx'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
