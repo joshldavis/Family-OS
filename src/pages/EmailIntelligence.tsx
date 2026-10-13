@@ -27,6 +27,7 @@ import {
 import { classifySingleEmail, FamilyContext, parseEmailSource } from '../services/emailClassifier';
 import { routeClassifiedEmails } from '../services/emailRouter';
 import { proposeSchoolEmailCandidate } from '../intelligence/captureCandidates';
+import { fingerprintPastedSchoolEmail } from '../intelligence/sourceFingerprint';
 import type { CaptureCandidate } from '../intelligence/captureCandidates';
 import { useFamily } from '../FamilyContext';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -144,8 +145,19 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
           (!isSupabaseConfigured ? 'demo:local' : null);
         if (!previewFamilyId) throw new Error('Family identity is required for review preview.');
 
+        // The legacy classifier generates a fresh random email ID on each
+        // paste. Replace that ID in this PREVIEW ONLY with a stable content
+        // fingerprint; otherwise rescanning the same email creates duplicates.
+        const sourceFingerprint = await fingerprintPastedSchoolEmail({
+          subject,
+          from,
+          body: cleaned,
+        });
         const proposals = classified
-          .map(email => proposeSchoolEmailCandidate(email, previewFamilyId, routerStudents))
+          .map((email, index) => proposeSchoolEmailCandidate({
+            ...email,
+            id: `${sourceFingerprint}:${index}`,
+          }, previewFamilyId, routerStudents))
           .filter((item): item is CaptureCandidate => item !== null);
 
         // Client-only idempotency: previewing a source twice replaces the card,
