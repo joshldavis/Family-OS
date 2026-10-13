@@ -39,3 +39,10 @@ test('deployment plan requires safe join flow before lockdown', () => {
   assert.match(cutover, /disposable database/i);
   assert.match(cutover, /existing legitimate family members/i);
 });
+
+
+test('cloud quick-login cannot impersonate a browser-stored family member', () => {
+  const source = read('../../src/pages/Auth.tsx');
+  assert.match(source, /!isSupabaseConfigured\s*&&\s*users\.length\s*>\s*0/);
+  assert.doesNotMatch(source, /Quick Switch \(children & demo\)/);
+});
