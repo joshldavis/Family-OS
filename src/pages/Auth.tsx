@@ -258,11 +258,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users, familyName }) => {
             </button>
           </form>
 
-          {/* Quick login for demo / child accounts */}
-          {users.length > 0 && (
+          {/* Quick login is local/demo ONLY. A cloud-configured client must
+              complete verified Supabase authentication. Never let browser
+              profile data impersonate an authenticated household member. */}
+          {!isSupabaseConfigured && users.length > 0 && (
             <div className="mt-8 pt-8 border-t text-center space-y-4">
               <p className="text-xs text-slate-400">
-                {isSupabaseConfigured ? 'Quick Switch (children & demo)' : 'Quick Login:'}
+                Quick Login:
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 {users.map(u => (
