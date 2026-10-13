@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { proposeSchoolEmailCandidate } from './captureCandidates.ts';
+import { fingerprintPastedSchoolEmail } from './sourceFingerprint.ts';
 import type { ClassifiedEmail } from '../types';
 
 const students = [
@@ -138,4 +139,26 @@ test('missing family and missing email id are rejected', () => {
     'family-a',
     students,
   ), /email id/);
+});
+
+test('pasted-message fingerprint is stable, omits raw text, and varies by source', async () => {
+  const first = await fingerprintPastedSchoolEmail({
+    from: 'Teacher@School.edu ',
+    subject: ' Field Trip ',
+    body: 'Permission slip due Friday',
+  });
+  const same = await fingerprintPastedSchoolEmail({
+    from: 'teacher@school.edu',
+    subject: 'Field Trip',
+    body: 'Permission slip due Friday',
+  });
+  const other = await fingerprintPastedSchoolEmail({
+    from: 'teacher@school.edu',
+    subject: 'Field Trip',
+    body: 'Permission slip due Saturday',
+  });
+  assert.equal(first, same);
+  assert.notEqual(first, other);
+  assert.match(first, /^pasted-sha256-[0-9a-f]{64}$/);
+  assert.ok(!first.includes('Permission slip'));
 });
