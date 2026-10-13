@@ -26,6 +26,16 @@ import {
 } from '../types';
 import { classifySingleEmail, FamilyContext, parseEmailSource } from '../services/emailClassifier';
 import { routeClassifiedEmails } from '../services/emailRouter';
+import { proposeSchoolEmailCandidate } from '../intelligence/captureCandidates';
+import type { CaptureCandidate } from '../intelligence/captureCandidates';
+import { useFamily } from '../FamilyContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+
+/**
+ * Opt-in, temporary review preview. This does not mutate tasks, events,
+ * observations, or Supabase and is OFF in existing deployments.
+ */
+const CAPTURE_REVIEW_PREVIEW = import.meta.env.VITE_FAMILY_CAPTURE_REVIEW === 'true';
 import ActionItemCard from '../components/ActionItemCard';
 import SchoolFeedItem, { FeedItem } from '../components/SchoolFeedItem';
 import EmailScanModal from '../components/EmailScanModal';
@@ -74,6 +84,9 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
   const [modalOpen, setModalOpen] = useState(false);
   const [localScanning, setLocalScanning] = useState(false);
   const [flashMessage, setFlashMessage] = useState<{ text: string; type: 'success' | 'warning' } | null>(null);
+  const [captureCandidates, setCaptureCandidates] = useState<CaptureCandidate[]>([]);
+  const { state } = useFamily();
+  const currentFamilyId = state.currentUser?.familyId ?? null;
   const lastScanTimestamp = useRef<number>(0);
 
   const pendingActions = actionItems.filter(a => a.status === 'pending')
@@ -122,8 +135,40 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
       const cleaned = parseEmailSource(text);
       const classified = await classifySingleEmail(cleaned, subject, from, context, apiKey);
 
-      const familyId = events[0]?.familyId ?? 'fam-1';
       const routerStudents = students.map(s => ({ id: s.id, name: s.name }));
+
+      if (CAPTURE_REVIEW_PREVIEW) {
+        // In demo-only mode the preview can use a local sentinel ID; never
+        // write it to a real database. Authenticated mode must have a family.
+        const previewFamilyId = currentFamilyId ??
+          (!isSupabaseConfigured ? 'demo:local' : null);
+        if (!previewFamilyId) throw new Error('Family identity is required for review preview.');
+
+        const proposals = classified
+          .map(email => proposeSchoolEmailCandidate(email, previewFamilyId, routerStudents))
+          .filter((item): item is CaptureCandidate => item !== null);
+
+        // Client-only idempotency: previewing a source twice replaces the card,
+        // rather than accumulating duplicate suggestions. Server writes require
+        // their own transactional idempotency enforcement in a future sprint.
+        setCaptureCandidates(previous => {
+          const keyed = new Map(previous.map(item => [item.idempotencyKey, item]));
+          for (const item of proposals) keyed.set(item.idempotencyKey, item);
+          return [...keyed.values()];
+        });
+        setFlashMessage({
+          text: proposals.length
+            ? `${proposals.length} item(s) ready for review. No family records were changed.`
+            : 'No actionable information found. No family records were changed.',
+          type: 'success',
+        });
+        setTimeout(() => setFlashMessage(null), 5000);
+        return;
+      }
+
+      // Compatibility path (legacy). No behavior change unless preview is
+      // explicitly enabled by a future test/deployment configuration.
+      const familyId = events[0]?.familyId ?? 'fam-1';
       const routingResult = routeClassifiedEmails(classified, {
         events,
         assignments,
@@ -161,7 +206,7 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
     } finally {
       setLocalScanning(false);
     }
-  }, [familyName, students, events, assignments, actionItems, onScanComplete]);
+  }, [familyName, students, events, assignments, actionItems, onScanComplete, currentFamilyId]);
 
   const formatLastScan = (iso: string | null) => {
     if (!iso) return 'Never scanned';
@@ -178,6 +223,53 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      {CAPTURE_REVIEW_PREVIEW && (
+        <section className="bg-white border border-indigo-200 rounded-2xl p-5 space-y-4">
+          <div>
+            <h2 className="font-bold text-slate-900">Family Intelligence — Review Preview</h2>
+            <p className="text-sm text-slate-600 mt-1">
+              Preview only. No tasks, calendar events, or family records are saved.
+              Suggestions disappear when this page reloads. Use the existing modules
+              to enter any confirmed item manually.
+            </p>
+          </div>
+          {captureCandidates.length === 0 ? (
+            <p className="text-sm text-slate-500">Scan a school email to see extracted suggestions here.</p>
+          ) : (
+            <div className="space-y-3">
+              {captureCandidates.map(item => (
+                <article key={item.idempotencyKey} className="border rounded-xl p-4">
+                  <div className="flex justify-between items-start gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                        {item.kind.replace(/_/g, ' ')} · {item.reviewStatus === 'needs_correction' ? 'Needs correction' : 'Ready for review'}
+                      </p>
+                      <h3 className="font-semibold text-slate-900 mt-1">{item.title}</h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Source: school email ({item.source.externalRef})
+                        {item.proposedFields.date ? ` · Date: ${item.proposedFields.date}` : ''}
+                      </p>
+                      {item.issues.length > 0 && (
+                        <ul className="list-disc list-inside mt-2 text-sm text-amber-800">
+                          {item.issues.map(issue => <li key={issue}>{issue}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCaptureCandidates(previous =>
+                        previous.filter(candidate => candidate.idempotencyKey !== item.idempotencyKey))}
+                      className="text-xs text-slate-600 border rounded-lg px-2 py-1 hover:bg-slate-50"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -185,7 +277,11 @@ const EmailIntelligence: React.FC<EmailIntelligenceProps> = ({
             <Mail size={28} className="text-indigo-600" />
             Email Intelligence
           </h1>
-          <p className="text-slate-500 mt-1">Scan school emails to auto-add events, assignments, and action items.</p>
+          <p className="text-slate-500 mt-1">
+            {CAPTURE_REVIEW_PREVIEW
+              ? 'Scan school emails to preview source-linked items before taking action.'
+              : 'Scan school emails to auto-add events, assignments, and action items.'}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {lastScanResult && (
