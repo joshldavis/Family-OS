@@ -54,6 +54,7 @@ import { AGENDA_CACHE_KEY, type AgendaCache } from './services/dailyAgenda';
 
 // Module system
 import { ModuleProvider, useModules } from './modules/ModuleContext';
+import { ModeProvider, useModeModules } from './modes/ModeContext';
 import { ICON_MAP } from './modules/iconMap';
 
 // Global state context (Phase 3)
@@ -119,7 +120,8 @@ const loadProfile = (): FamilyProfile | null => {
 
 // ── Inner app (needs ModuleProvider + FamilyProvider already in tree) ─────────
 const AppInner: React.FC = () => {
-  const { isEnabled, getEnabledRoutes, setEnabledModules } = useModules();
+  const { isEnabled, getEnabledRoutes, featureEnabled, modeName } = useModeModules();
+  const { setEnabledModules } = useModules();
   const { state, dispatch, attentionCount, overdueChores, overdueAssignments, budgetAlerts } = useFamily();
 
   // ── Profile / onboarding ─────────────────────────────────────────────
@@ -554,6 +556,11 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
             <div className="hidden md:flex items-center gap-2 px-2 mb-8">
               <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">F</div>
               <span className="font-bold text-lg tracking-tight">{activeFamily.name}</span>
+              {featureEnabled && (
+                <span className="ml-auto text-[10px] text-indigo-700 bg-indigo-50 rounded px-2 py-1 whitespace-nowrap">
+                  {modeName}
+                </span>
+              )}
             </div>
 
             {/* Dynamic nav */}
@@ -640,11 +647,23 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
   );
 };
 
-// ── Root — wraps everything in ModuleProvider + FamilyProvider ────────────────
+// ── Mode view is family-scoped; remounting on household change prevents a
+// previous household's mode preferences from appearing for a new login.
+const ScopedApp: React.FC = () => {
+  const { state } = useFamily();
+  const familyId = state.currentUser?.familyId ?? null;
+  return (
+    <ModeProvider key={familyId ?? 'signed-out'} familyId={familyId}>
+      <AppInner />
+    </ModeProvider>
+  );
+};
+
+// ── Root — original module/data providers remain the canonical data owners ────
 const App: React.FC = () => (
   <ModuleProvider>
     <FamilyProvider>
-      <AppInner />
+      <ScopedApp />
     </FamilyProvider>
   </ModuleProvider>
 );
