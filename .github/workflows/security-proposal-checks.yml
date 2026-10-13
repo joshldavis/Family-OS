@@ -8,6 +8,7 @@ on:
       - 'tests/security/**'
       - 'src/security/**'
       - 'api/_lib/verifiedIdentity*'
+      - 'api/_lib/invitations*'
       - 'src/pages/Auth.tsx'
       - '.github/workflows/security-proposal-checks.yml'
   workflow_dispatch:
@@ -28,4 +29,4 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node --test tests/security/securityCutover.test.mjs
-      - run: node --experimental-strip-types --test src/security/authorization.test.ts api/_lib/verifiedIdentity.test.ts
+      - run: node --experimental-strip-types --test src/security/authorization.test.ts api/_lib/verifiedIdentity.test.ts api/_lib/invitations.test.ts
