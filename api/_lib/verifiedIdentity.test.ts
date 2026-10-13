@@ -51,6 +51,7 @@ test('unconfirmed and anonymous accounts cannot enter trusted membership workflo
     { id: 'u1', email: 'a@example.com' },
     { id: 'u2', email: 'b@example.com', is_anonymous: true, email_confirmed_at: '2026-10-13T00:00:00Z' },
     { id: 'u3', email_confirmed_at: '2026-10-13T00:00:00Z' },
+    { id: 'u4', email: 'unverified@example.org', confirmed_at: '2026-10-13T00:00:00Z' },
   ]) {
     const auth = { getUser: async () => ({ data: { user: candidate }, error: null }) };
     assert.deepEqual(await verifyBearerIdentity('Bearer ' + token, auth), {
