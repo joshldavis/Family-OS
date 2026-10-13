@@ -1,4 +1,4 @@
-import { OPERATING_MODES } from './registry';
+import { OPERATING_MODES } from './registry.ts';
 import type {
   ModuleManifestEntry,
   ModeResolution,
