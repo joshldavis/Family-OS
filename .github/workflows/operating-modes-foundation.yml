@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'src/modes/**'
+      - 'src/App.tsx'
+      - 'src/pages/Settings.tsx'
+      - 'src/components/ModuleSettings.tsx'
+      - 'src/components/OperatingModeSettings.tsx'
       - '.github/workflows/operating-modes-foundation.yml'
       - 'tsconfig.json'
       - 'package*.json'
@@ -24,4 +28,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: node --experimental-strip-types --test src/modes/resolver.test.ts
+      - run: node --experimental-strip-types --test src/modes/resolver.test.ts src/modes/storage.test.ts
