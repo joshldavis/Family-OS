@@ -14,6 +14,7 @@ The same checked-in tenant lookup is a public-schema `SECURITY DEFINER` function
 
 - Vercel project `family-os` was found, ID `prj_ySBHcLFiQ68sJOMZ29FYXN6UQMoD`.
 - Vercel reports `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` configured for production/preview; values were not retrieved.
+- **Preview/production credential isolation:** the same Vercel environment-variable entries are targeted to both `preview` and `production`. Before merging agent/backend features, verify preview deployments cannot use a production database service-role key; configure separate non-production Supabase credentials for preview, restrict deployment trust, and rotate credentials if their exposure is suspected. No secret values were inspected.
 - The visible Vercel environment list does **not** include `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` used by `src/lib/supabase.ts`. A built bundle may use different configuration or localStorage/offline fallback. Verify deployed browser behavior before drawing conclusions.
 - Available connected Supabase projects were MainStreetDiligence, made-again, and Travel Connects Lead. None was identifiable as Family OS, so the deployed Family OS database has **not** been inspected.
 - No production data migration or permission change has been made.
