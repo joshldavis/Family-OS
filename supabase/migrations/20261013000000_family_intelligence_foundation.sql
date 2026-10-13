@@ -85,8 +85,8 @@ create index if not exists family_links_outgoing_idx
 create index if not exists family_links_incoming_idx
   on public.family_entity_links(family_id, to_entity_id, relationship);
 
--- Immutable event facts: corrections should be new events (possibly referencing
--- the superseded event in payload), not UPDATE/DELETE operations.
+-- Append-only during normal operation: corrections are new events, not UPDATE.
+-- Explicit privileged hard-deletion remains possible for family data erasure.
 create table if not exists public.family_activity_events (
   id                  uuid primary key default gen_random_uuid(),
   family_id           text not null references public.families(id) on delete cascade,
@@ -121,13 +121,13 @@ returns trigger
 language plpgsql
 as $$
 begin
-  raise exception 'Family activity events are append-only. Record a correction event instead.';
+  raise exception 'Family activity events cannot be updated. Record a correction event instead.';
 end;
 $$;
 
 drop trigger if exists family_activity_events_no_mutation on public.family_activity_events;
 create trigger family_activity_events_no_mutation
-before update or delete on public.family_activity_events
+before update on public.family_activity_events
 for each row execute function public.family_intelligence_prevent_event_mutation();
 
 -- Observation is distinct from diagnosis or inferred causal explanation.
