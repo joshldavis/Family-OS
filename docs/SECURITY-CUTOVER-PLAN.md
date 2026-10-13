@@ -40,7 +40,7 @@ There is also a product correctness issue: `Auth.tsx` uses an untrusted client-s
 
 ## Safe cutover sequence
 
-**P0 — Confirm and back up:** identify the real Supabase ref by the authorized project owner; take snapshot; run read-only audit `supabase/audits/family_os_readonly_baseline.sql` (in draft PR #2); verify deployed browser env and current RLS permissions. Inventory all auth-linked profiles, null `auth_id` rows, duplicate family memberships and existing invite codes **without exporting PII to a public repository**.
+**P0 — Confirm and back up:** identify the real Supabase ref by the authorized project owner; take a verified backup/snapshot and rehearse restore; run read-only audit `supabase/audits/family_os_readonly_baseline.sql` (in draft PR #2); verify deployed browser env and current RLS permissions. Inventory all auth-linked profiles, null `auth_id` rows, duplicate family memberships and existing invite codes **without exporting PII to a public repository**.
 
 **P1 — Build secure server flows:** implement verified signup, family bootstrap and invite issue/accept/revoke backed by an atomic DB operation. Review invitation role semantics with existing family workflows. Place service-role key only in server runtime. Add concurrency/rate-limit/expiration and comprehensive integration tests in isolated Supabase.
 
