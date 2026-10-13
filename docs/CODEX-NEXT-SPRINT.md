@@ -31,7 +31,7 @@ Make the existing Family OS a safe, multi-household, canonical data platform **w
 ### B. Validate the draft foundation migration
 1. Stand up a disposable Supabase database with the existing baseline schema applied.
 2. Apply supabase/migrations/20261013000000_family_intelligence_foundation.sql in that **disposable** environment.
-3. Verify all six tables, composite family FKs, indexes, append-only event updates, idempotency indexes, and service-only access.
+3. Verify all six tables, composite family FKs, indexes, idempotency indexes, and client-denied RLS. The append-only policy for normal writes must be enforced in a future trusted gateway, while privileged erasure remains possible.
 4. Verify normal anon/authenticated clients get zero rows and cannot write foundation tables while policies are absent; verify the privileged erasure path can delete a family and its related data without leaving orphaned data.
 5. Add repeatable migration and RLS tests and a rollback/recovery note. Do not apply to production.
 
