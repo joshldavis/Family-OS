@@ -29,6 +29,14 @@ This document proposes a V1 architecture; it does **not** mean the migration has
 5. **Credential management:** current AI service supports provider keys in localStorage and browser-side requests. Introduce a server-side AI/tool gateway before production multi-household rollout.
 6. **Private data:** do not put raw children's behavioral/medical records into searchable generic event payloads by default. Keep sensitive content segregated with explicit user consent and retention controls.
 
+## Implemented in the draft review branch
+
+A first **non-activated** pure TypeScript capture adapter exists in `src/intelligence/captureCandidates.ts`. It converts a classified school email into a source-linked, deterministic, review-only candidate. It preserves unknown children and dates instead of guessing, never performs side effects, and returns a tenant-scoped idempotency key. The existing email router has NOT been replaced; a trusted, authenticated approval gateway and authorization tests are required before connecting it.
+
+Tests live in `src/intelligence/captureCandidates.test.ts` and run through `npm run test:foundation` using Node 22. A GitHub Actions check completed successfully with `npm ci`, `npm run build`, and `npm run test:foundation`: https://github.com/joshldavis/Family-OS/actions/runs/38440713875.
+
+Added `docs/FAMILY-DATA-INVENTORY.md` with current browser/DB persistence map and concrete auth risks. The read-only schema audit query is in `supabase/audits/family_os_readonly_baseline.sql`. No identifiable Family OS Supabase project appeared among the connected projects inspected on 2026-10-13, so **no live schema verification or migration was performed**.
+
 ## Design: six additive foundation tables
 
 **1. family_entities** — shared references for domain records (person, task, event, document, meal, routine, observation, etc.), with stable UUID identity and optional legacy module/ID reference. Does not replace the existing domain tables.
