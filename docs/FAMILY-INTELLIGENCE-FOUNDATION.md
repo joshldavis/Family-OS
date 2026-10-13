@@ -8,6 +8,8 @@ Preserve the current React modules and their routes. Introduce a shared, househo
 
 This document proposes a V1 architecture; it does **not** mean the migration has been deployed or the new system is operational.
 
+**Integration with operating modes:** main also contains docs/LEARNING-SUPPORT-MODE-SPEC.md (proposed General Family / Learning Support / Custom modes). These are complementary: operating modes control which experiences and capabilities are enabled, while this intelligence layer is shared beneath every mode. Do not make mode switching duplicate household records or change their visibility without explicit permission. Mode-only work (FOS-001A) can proceed independently of the locked-down foundation tables; connecting sensitive data/agents requires the Phase 0 security gate.
+
 ## Audited reality in the current main branch
 
 - Application stack: React 19, TypeScript, Vite, module registry and FamilyContext.
