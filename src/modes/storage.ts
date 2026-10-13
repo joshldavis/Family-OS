@@ -1,5 +1,5 @@
 import type { OperatingModePreferencesV1, OperatingModeId, ModuleOverride } from './types';
-import { prepareLegacyModePreferences } from './resolver';
+import { prepareLegacyModePreferences } from './resolver.ts';
 
 const STORAGE_PREFIX = 'family_os_operating_mode_preferences:v1:';
 const VALID_MODES = new Set<OperatingModeId>(['general-family', 'learning-support', 'custom']);
