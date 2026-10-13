@@ -21,6 +21,15 @@ from pg_catalog.pg_policies
 where schemaname = 'public' and tablename in ('families', 'profiles')
 order by tablename, policyname;
 
+select
+  has_function_privilege('anon', 'public.get_my_family_id()', 'EXECUTE') as anon_can_read_membership_lookup,
+  has_function_privilege('authenticated', 'public.get_my_family_id()', 'EXECUTE') as member_can_read_membership_lookup;
+
+select p.proname, p.prosecdef, p.proconfig
+from pg_catalog.pg_proc p
+join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname = 'get_my_family_id';
+
 -- Fails loudly if the tables still grant untrusted mutation.
 do $fos_security_verify$
 begin
@@ -35,6 +44,21 @@ begin
     or has_table_privilege('authenticated', 'public.profiles', 'DELETE')
   ) then
     raise exception 'FOS-SEC-001 FAILED: untrusted roles still have family/profile mutation privileges';
+  end if;
+
+  if has_function_privilege('anon', 'public.get_my_family_id()', 'EXECUTE') then
+    raise exception 'FOS-SEC-001 FAILED: anonymous clients can execute membership lookup';
+  end if;
+  if not has_function_privilege('authenticated', 'public.get_my_family_id()', 'EXECUTE') then
+    raise exception 'FOS-SEC-001 FAILED: authenticated members cannot execute membership lookup';
+  end if;
+  if not exists (
+    select 1 from pg_catalog.pg_indexes
+    where schemaname = 'public'
+      and tablename = 'profiles'
+      and indexname = 'profiles_unique_authenticated_identity'
+  ) then
+    raise exception 'FOS-SEC-001 FAILED: unique auth identity index missing';
   end if;
 
   if exists (
