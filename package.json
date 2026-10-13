@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:foundation": "node --experimental-strip-types --test src/intelligence/captureCandidates.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.37.0",
