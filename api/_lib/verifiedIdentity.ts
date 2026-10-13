@@ -14,7 +14,6 @@ export interface SupabaseAuthVerifier {
       id: string;
       email?: string;
       email_confirmed_at?: string | null;
-      confirmed_at?: string | null;
       is_anonymous?: boolean;
     } | null };
     error: { message: string } | null;
@@ -53,7 +52,7 @@ export async function verifyBearerIdentity(
     if (
       user.is_anonymous ||
       !user.email ||
-      !(user.email_confirmed_at || user.confirmed_at)
+      !user.email_confirmed_at
     ) {
       return { ok: false, reason: 'unverified_identity' };
     }
