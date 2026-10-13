@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 const proposal = read('../../supabase/proposals/fos_sec_001_household_lockdown.sql');
@@ -17,7 +17,8 @@ test('FOS-SEC-001 proposal removes permissive enrollment and broad update polici
 });
 
 test('security proposal cannot be inadvertently included in migrations', () => {
-  const migrations = readdirSync(new URL('../../supabase/migrations/', import.meta.url));
+  const dir = new URL('../../supabase/migrations/', import.meta.url);
+  const migrations = existsSync(dir) ? readdirSync(dir) : [];
   assert.equal(migrations.some(file => file.toLowerCase().includes('fos_sec_001')), false);
   assert.match(cutover, /not (yet )?verified|not deployed|not yet verified/i);
   assert.match(proposal, /DO NOT execute in production/i);
