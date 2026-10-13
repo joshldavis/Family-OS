@@ -30,6 +30,7 @@
 - Mode selection does not start or stop cron jobs or integration pollers. Background capabilities remain independent and unactivated; hidden nav does NOT mean private data has been secured.
 - **Learning Support currently changes module visibility only**, not the dashboard content. FOS-001C will build an exceptions-first dashboard using existing safe family context, plus decision queue/review links.
 - The mode setting is LOCAL to the current device and family. Cross-device persistence requires a later verified Supabase settings service.
+- The **legacy** `family_os_module_preferences` store is still global within the browser, so General Family module choices can be shared across households on the same device. This PR scopes only the new operating-mode overrides. Do not claim full cross-household browser isolation until all older stores are migrated to family-specific keys.
 - The whole feature is OFF unless the build-time flag is explicitly set. No production changes are performed by this PR.
 - The FOS-001A mode resolver branch is a prerequisite; this PR is stacked on it.
 
