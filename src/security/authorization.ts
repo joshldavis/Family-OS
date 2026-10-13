@@ -58,8 +58,8 @@ const BASE_PERMISSIONS: Readonly<Record<HouseholdMemberRole, ReadonlySet<Househo
     'school.read', 'school.write', 'support.read', 'support.write',
     'external.send',
   ]),
-  caregiver: new Set(['household.read', 'tasks.read', 'school.read']),
-  child: new Set(['tasks.read']),
+  caregiver: new Set(['household.read']),
+  child: new Set([]),
 };
 
 /** Child-sensitive capabilities always require a verified scope. */
@@ -93,7 +93,8 @@ export function authorizeHouseholdOperation(
     return { allow: false, reason: 'insufficient_role' };
   }
   if (CHILD_SCOPED.has(request.capability)) {
-    if (!request.childId || !member.permittedChildIds.includes(request.childId)) {
+    if (!request.childId || !Array.isArray(member.permittedChildIds) ||
+        !member.permittedChildIds.includes(request.childId)) {
       return { allow: false, reason: 'child_scope_required' };
     }
   }
