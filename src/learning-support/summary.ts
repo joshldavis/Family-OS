@@ -131,14 +131,28 @@ export function buildLearningSupportSummary(args: {
   for (const event of args.events) {
     // Events have explicit household ownership; unowned events are excluded.
     if (event.familyId !== args.familyId) continue;
+    // An absolute timestamp can fall on a DIFFERENT household-local date
+    // from its UTC date. Resolve it with the same browser-local calendar date
+    // that the rest of Family OS uses. A timestamp without an offset is local.
+    // Validate the original calendar date and clock fields before parsing:
+    // JavaScript Date silently normalizes impossible dates/times otherwise.
     const match = typeof event.start === 'string'
-      ? event.start.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?$/)
+      ? event.start.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-](\d{2}):(\d{2}))?$/)
       : null;
+    const validDate = match && asVerifiedDate(match[1]);
     const hours = match ? Number(match[2]) : -1;
     const minutes = match ? Number(match[3]) : -1;
-    const rawDate = match && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59
-      ? match[1] : null;
-    const date = asVerifiedDate(rawDate);
+    const seconds = match?.[4] ? Number(match[4]) : 0;
+    const offsetHours = match?.[6] ? Number(match[6]) : 0;
+    const offsetMinutes = match?.[7] ? Number(match[7]) : 0;
+    const clockValid = hours >= 0 && hours <= 23 &&
+      minutes >= 0 && minutes <= 59 && seconds >= 0 && seconds <= 59 &&
+      offsetHours >= 0 && offsetHours <= 14 &&
+      offsetMinutes >= 0 && offsetMinutes <= 59 &&
+      (offsetHours < 14 || offsetMinutes === 0);
+    const timestamp = validDate && clockValid ? new Date(event.start) : null;
+    const date = timestamp && Number.isFinite(timestamp.getTime())
+      ? localDateISO(timestamp) : null;
     const base: Omit<LearningSupportCard, 'bucket'> = {
       id: 'event:' + event.id,
       kind: 'event',
@@ -146,7 +160,9 @@ export function buildLearningSupportSummary(args: {
       detail: event.location?.trim() ? 'Calendar · ' + event.location.trim() : 'Calendar event',
       person: null, // never infer a child from an unverified attendee list
       dueDate: date,
-      sourceLabel: event.provider === 'google' ? 'Google Calendar' : 'Family calendar',
+      sourceLabel: event.provider === 'google'
+        ? 'Calendar entry (Google-labeled; origin not independently verified)'
+        : 'Family calendar entry',
       href: '/calendar',
     };
 
