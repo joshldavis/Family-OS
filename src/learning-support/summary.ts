@@ -132,9 +132,13 @@ export function buildLearningSupportSummary(args: {
   for (const event of args.events) {
     // Events have explicit household ownership; unowned events are excluded.
     if (event.familyId !== args.familyId) continue;
-    const rawDate = typeof event.start === 'string'
-      ? event.start.match(/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}/)?.[1] ?? null
+    const match = typeof event.start === 'string'
+      ? event.start.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})?$/)
       : null;
+    const hours = match ? Number(match[2]) : -1;
+    const minutes = match ? Number(match[3]) : -1;
+    const rawDate = match && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59
+      ? match[1] : null;
     const date = asVerifiedDate(rawDate);
     const base: Omit<LearningSupportCard, 'bucket'> = {
       id: 'event:' + event.id,
