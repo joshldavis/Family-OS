@@ -64,6 +64,7 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 // Pages
 import Dashboard         from './pages/Dashboard';
+import LearningSupportHome from './pages/LearningSupportHome';
 import Schoolwork        from './pages/Schoolwork';
 import Chores            from './pages/Chores';
 import Calendar          from './pages/Calendar';
@@ -120,7 +121,7 @@ const loadProfile = (): FamilyProfile | null => {
 
 // ── Inner app (needs ModuleProvider + FamilyProvider already in tree) ─────────
 const AppInner: React.FC = () => {
-  const { isEnabled, getEnabledRoutes, featureEnabled, modeName } = useModeModules();
+  const { isEnabled, getEnabledRoutes, featureEnabled, modeName, activeMode } = useModeModules();
   const { setEnabledModules, isEnabled: isLegacyModuleEnabled } = useModules();
   const { state, dispatch, attentionCount, overdueChores, overdueAssignments, budgetAlerts } = useFamily();
 
@@ -628,13 +629,22 @@ Budget: $${state.budgets.reduce((a, b) => a + b.spent, 0)} of $${state.budgets.r
           <div className="max-w-5xl mx-auto p-4 pb-24 md:pb-8 md:p-8">
             <Routes>
               {enabledRoutes.map(mod => {
-                const PageComponent = MODULE_COMPONENTS[mod.id];
+                // Replace only the Dashboard ROUTE for authenticated parents in
+                // Learning Support mode. All other modes and existing pages stay
+                // unchanged; the new home never mutates data.
+                const supportHome = featureEnabled &&
+                  activeMode === 'learning-support' &&
+                  state.currentUser?.role === Role.PARENT &&
+                  mod.id === 'dashboard';
+                const PageComponent = supportHome
+                  ? LearningSupportHome
+                  : MODULE_COMPONENTS[mod.id];
                 if (!PageComponent) return null;
                 return (
                   <Route
                     key={mod.id}
                     path={mod.route!.path}
-                    element={<PageComponent {...getPropsForModule(mod.id)} />}
+                    element={<PageComponent {...(supportHome ? {} : getPropsForModule(mod.id))} />}
                   />
                 );
               })}
