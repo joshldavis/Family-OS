@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildLearningSupportSummary } from './summary.ts';
+import { buildLearningSupportSummary, localDateISO } from './summary.ts';
 import type { Assignment, Student, CalendarEvent, Status } from '../types.ts';
 
 const DONE = 'Done' as Status;
@@ -131,4 +131,34 @@ test('malformed today fails rather than silently normalizing dates', () => {
     familyId: 'family-a', today: '2026-02-30', students,
     assignments: [], events: [],
   }), /valid local date/);
+});
+
+test('absolute timestamps display the household-local calendar day, not the UTC day', () => {
+  const value = '2026-10-16T00:30:00.000Z';
+  const s = run([], [event('boundary', 'family-a', value)]);
+  assert.equal(s.organized.length, 1);
+  assert.equal(s.organized[0].dueDate, localDateISO(new Date(value)));
+  // CI additionally runs this test under America/New_York, where it is Oct 15.
+  if (process.env.TZ === 'America/New_York') {
+    assert.equal(s.organized[0].dueDate, '2026-10-15');
+  }
+});
+
+test('invalid calendar timezones and seconds require review, not a confirmed date', () => {
+  const s = run([], [
+    event('offset', 'family-a', '2026-10-16T10:00+15:00'),
+    event('seconds', 'family-a', '2026-10-16T10:00:72Z'),
+    event('minute', 'family-a', '2026-10-16T10:00+04:78'),
+    event('day', 'family-a', '2026-02-30T10:00'),
+  ]);
+  assert.equal(s.organized.length, 0);
+  assert.equal(s.review.length, 4);
+  assert.ok(s.review.every(x => x.dueDate === null));
+});
+
+test('calendar provider labels do not claim independently verified source data', () => {
+  const g = { ...event('google-labeled', 'family-a', '2026-10-16T10:00'), provider: 'google' as const };
+  const s = run([], [g]);
+  assert.match(s.organized[0].sourceLabel ?? '', /Google-labeled/);
+  assert.match(s.organized[0].sourceLabel ?? '', /not independently verified/);
 });
