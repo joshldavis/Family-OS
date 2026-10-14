@@ -32,3 +32,5 @@ jobs:
       - run: npm run build
       - run: VITE_FAMILY_OPERATING_MODES=true npm run build
       - run: node --experimental-strip-types --test src/modes/resolver.test.ts src/modes/storage.test.ts src/learning-support/summary.test.ts
+      # Test absolute calendar timestamps near midnight under an Eastern time zone.
+      - run: TZ=America/New_York node --experimental-strip-types --test src/learning-support/summary.test.ts
