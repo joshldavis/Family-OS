@@ -133,7 +133,7 @@ export function buildLearningSupportSummary(args: {
     // Events have explicit household ownership; unowned events are excluded.
     if (event.familyId !== args.familyId) continue;
     const match = typeof event.start === 'string'
-      ? event.start.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})?$/)
+      ? event.start.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?$/)
       : null;
     const hours = match ? Number(match[2]) : -1;
     const minutes = match ? Number(match[3]) : -1;
