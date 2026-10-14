@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildLearningSupportSummary } from './summary.ts';
-import { Status } from '../types.ts';
-import type { Assignment, Student, CalendarEvent } from '../types.ts';
+import type { Assignment, Student, CalendarEvent, Status } from '../types.ts';
+
+const DONE = 'Done' as Status;
+const NOT_STARTED = 'Not Started' as Status;
 
 const students: Student[] = [
   { id: 'child-1', familyId: 'family-a', name: 'Student A', grade: '5' },
@@ -10,7 +12,7 @@ const students: Student[] = [
 ];
 
 const assignment = (
-  id: string, studentId: string, dueDate: string, status = Status.NOT_STARTED,
+  id: string, studentId: string, dueDate: string, status = NOT_STARTED,
 ): Assignment => ({
   id, studentId, dueDate, status, subject: 'Reading',
   title: 'Finish reading log', estimatedMinutes: 10, source: 'Manual',
@@ -57,8 +59,8 @@ test('missing dates require review instead of being silently replaced', () => {
 
 test('completed work is not mislabeled overdue; recently completed work is organized', () => {
   const s = run([
-    assignment('done', 'child-1', '2026-10-13', Status.DONE),
-    assignment('old-done', 'child-1', '2026-09-01', Status.DONE),
+    assignment('done', 'child-1', '2026-10-13', DONE),
+    assignment('old-done', 'child-1', '2026-09-01', DONE),
   ]);
   assert.equal(s.attention.length, 0);
   assert.deepEqual(s.organized.map(x => x.id), ['assignment:done']);
