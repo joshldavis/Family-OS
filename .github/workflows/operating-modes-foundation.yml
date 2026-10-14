@@ -29,4 +29,5 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: VITE_FAMILY_OPERATING_MODES=true npm run build
+      - run: node --experimental-strip-types --test src/modes/noBackgroundAutoStart.test.ts
       - run: node --experimental-strip-types --test src/modes/resolver.test.ts src/modes/storage.test.ts
