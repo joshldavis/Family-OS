@@ -122,7 +122,7 @@ const loadProfile = (): FamilyProfile | null => {
 // ── Inner app (needs ModuleProvider + FamilyProvider already in tree) ─────────
 const AppInner: React.FC = () => {
   const { isEnabled, getEnabledRoutes, featureEnabled, modeName, activeMode } = useModeModules();
-  const { setEnabledModules } = useModules();
+  const { setEnabledModules, isEnabled: isLegacyModuleEnabled } = useModules();
   const { state, dispatch, attentionCount, overdueChores, overdueAssignments, budgetAlerts } = useFamily();
 
   // ── Profile / onboarding ─────────────────────────────────────────────
@@ -371,12 +371,14 @@ const AppInner: React.FC = () => {
   // missing kid-day joke/fact is generated in the background before they
   // navigate to /agenda or hit Print.
   const prewarmStatus = usePrewarmDailyAgenda(
-    isEnabled('daily-agenda') ? (profile?.users ?? MOCK_USERS) : [],
+    isLegacyModuleEnabled('daily-agenda') ? (profile?.users ?? MOCK_USERS) : [],
     state.students,
     agendaCache,
     setAgendaCache,
     {
-      enabled: isEnabled('daily-agenda'),
+      // Mode changes only affect visibility. They must not opt a family into
+      // background AI generation that was disabled in original module settings.
+      enabled: isLegacyModuleEnabled('daily-agenda'),
       loggedIn: !!state.currentUser,
       familyId: activeFamily.id,
     },
