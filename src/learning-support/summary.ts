@@ -1,5 +1,4 @@
 import type { Assignment, CalendarEvent, Student } from '../types.ts';
-import { Status } from '../types.ts';
 
 /**
  * This is a READ-ONLY view of ALREADY AVAILABLE family state.
@@ -107,14 +106,14 @@ export function buildLearningSupportSummary(args: {
       href: '/schoolwork',
     };
     if (!date) {
-      if (assignment.status !== Status.DONE) {
+      if (assignment.status !== 'Done') {
         review.push({ ...base, bucket: 'review', detail: detail + ' · Verify missing or invalid deadline' });
       }
       continue;
     }
 
     const days = ordinal(date) - ordinal(args.today);
-    if (assignment.status === Status.DONE) {
+    if (assignment.status === 'Done') {
       if (days >= -7 && days <= 0) organized.push({
         ...base, bucket: 'organized', detail: detail + ' · Marked complete',
       });
