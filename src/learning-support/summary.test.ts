@@ -84,11 +84,12 @@ test('events cannot invent child association or time', () => {
   const s = run([], [
     event('good', 'family-a', '2026-10-16T09:00'),
     event('bad', 'family-a', 'not-a-real-date'),
+    event('bad-clock', 'family-a', '2026-10-16T99:99'),
   ]);
   assert.equal(s.organized[0].person, null);
   assert.equal(s.organized[0].dueDate, '2026-10-16');
-  assert.equal(s.review.length, 1);
-  assert.equal(s.review[0].dueDate, null);
+  assert.equal(s.review.length, 2);
+  assert.ok(s.review.every(item => item.dueDate === null));
 });
 
 test('no family identity means no data is visible', () => {
