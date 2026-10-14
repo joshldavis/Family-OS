@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { User, Role, Family, EmailScanConfig } from '../types';
 import ModuleSettings from '../components/ModuleSettings';
+import OperatingModeSettings from '../components/OperatingModeSettings';
+import { OPERATING_MODES_ENABLED } from '../modes/ModeContext';
 import { useFamily } from '../FamilyContext';
 import {
   Shield,
@@ -183,6 +185,9 @@ const Settings: React.FC<SettingsProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
+
+          {/* Optional, reversible operating-mode selector. */}
+          {OPERATING_MODES_ENABLED && <OperatingModeSettings />}
 
           {/* Modules */}
           <section className="bg-white border rounded-2xl notion-shadow overflow-hidden">

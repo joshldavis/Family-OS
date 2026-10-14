@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { LayoutDashboard } from 'lucide-react';
-import { useModules } from '../modules/ModuleContext';
+import { useModeModules } from '../modes/ModeContext';
 import { ICON_MAP } from '../modules/iconMap';
 import { ModuleDefinition, ModuleCategory } from '../modules/types';
 import { getDependents } from '../modules/registry';
@@ -88,11 +88,11 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ mod, enabled, onToggle }) => {
 
 // ── Main component ────────────────────────────────────────────────────────────
 const ModuleSettings: React.FC = () => {
-  const { allModules, isEnabled, toggleModule, enabledModules } = useModules();
+  const { allModules, isEnabled, toggleModule, enabledModules, canChangeMode, featureEnabled } = useModeModules();
   const [confirmDisable, setConfirmDisable] = useState<ModuleDefinition | null>(null);
 
   const handleToggle = (mod: ModuleDefinition) => {
-    if (!mod.canDisable) return;
+    if (!mod.canDisable || (featureEnabled && !canChangeMode)) return;
     if (isEnabled(mod.id)) {
       const dependents = getDependents(mod.id, enabledModules);
       if (dependents.length > 0) {
@@ -107,6 +107,11 @@ const ModuleSettings: React.FC = () => {
 
   return (
     <div className="space-y-8">
+      {featureEnabled && (
+        <p className="text-xs text-slate-500">
+          Module changes apply to the selected mode only. General Family retains its original choices.
+        </p>
+      )}
       {categories.map(cat => {
         const mods = allModules.filter(m => m.category === cat);
         const meta = CATEGORY_META[cat];
