@@ -83,9 +83,11 @@ test('student id/family match protects against unrelated family and orphan assig
 test('events cannot invent child association or time', () => {
   const s = run([], [
     event('good', 'family-a', '2026-10-16T09:00'),
+    event('good-utc', 'family-a', '2026-10-16T11:00:00.000Z'),
     event('bad', 'family-a', 'not-a-real-date'),
     event('bad-clock', 'family-a', '2026-10-16T99:99'),
   ]);
+  assert.equal(s.organized.length, 2);
   assert.equal(s.organized[0].person, null);
   assert.equal(s.organized[0].dueDate, '2026-10-16');
   assert.equal(s.review.length, 2);
