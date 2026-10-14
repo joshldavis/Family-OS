@@ -138,8 +138,8 @@ const LearningSupportHome: React.FC = () => {
           What needs your attention?
         </h1>
         <p className="text-slate-600 text-sm max-w-2xl">
-          A clearer view of school commitments already entered in Family OS.
-          Information here comes from your Schoolwork and Calendar records—not inferred diagnoses or automated decisions.
+          A clearer view of school assignments and family calendar entries already recorded in Family OS.
+          Calendar entries are not assumed to be school-related. This overview does not infer diagnoses or make decisions.
         </p>
       </header>
 
@@ -172,11 +172,11 @@ const LearningSupportHome: React.FC = () => {
 
       <DashboardSection
         title="Already organized"
-        description="Upcoming assignments and events in the next two weeks, plus recently completed schoolwork."
+        description="Upcoming assignments and family calendar entries in the next two weeks, plus recently completed schoolwork."
         icon={<CheckCircle2 size={21} className="text-emerald-600" aria-hidden="true" />}
         items={summary.organized}
         count={summary.counts.organized}
-        emptyMessage="No upcoming or recently completed items found. Open Schoolwork or Calendar to add what is missing."
+        emptyMessage="No upcoming or recently completed items found in the visible records. Check Schoolwork or Calendar for anything missing."
       />
 
       <DashboardSection
