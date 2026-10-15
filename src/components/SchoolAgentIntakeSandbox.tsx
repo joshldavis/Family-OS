@@ -183,7 +183,7 @@ const SchoolAgentIntakeSandbox: React.FC = () => {
             <FileCheck2 size={19} aria-hidden="true" /> Review candidate (not created)
           </h3>
           <p className="text-sm text-slate-700">
-            <strong>{candidate.title}</strong> · {candidate.kind.replaceAll('_', ' ')}
+            <strong>{candidate.title}</strong> · {candidate.kind.replace(/_/g, ' ')}
           </p>
           <p className="text-sm text-slate-700">
             Recorded date: {candidate.proposedFields.date ?? 'Unconfirmed'} ·
