@@ -8,6 +8,7 @@ import { Role } from '../types';
 import { useFamily } from '../FamilyContext';
 import { useModeModules } from '../modes/ModeContext';
 import ParentDecisionInbox from '../components/ParentDecisionInbox';
+import SchoolAgentIntakeSandbox from '../components/SchoolAgentIntakeSandbox';
 import { buildLearningSupportSummary, localDateISO } from '../learning-support/summary';
 import type { LearningSupportCard } from '../learning-support/summary';
 
@@ -165,6 +166,10 @@ const LearningSupportHome: React.FC = () => {
       {/* Reversible, session-only parent decision prototype: no write actions. */}
       {import.meta.env.VITE_FAMILY_DECISION_INBOX === 'true' && (
         <ParentDecisionInbox key={familyId ?? 'signed-out'} summary={summary} />
+      )}
+
+      {import.meta.env.VITE_FAMILY_SCHOOL_AGENT_SANDBOX === 'true' && (
+        <SchoolAgentIntakeSandbox key={familyId ?? 'signed-out'} />
       )}
 
       <DashboardSection
