@@ -163,7 +163,9 @@ const LearningSupportHome: React.FC = () => {
       </div>
 
       {/* Reversible, session-only parent decision prototype: no write actions. */}
-      <ParentDecisionInbox key={familyId ?? 'signed-out'} summary={summary} />
+      {import.meta.env.VITE_FAMILY_DECISION_INBOX === 'true' && (
+        <ParentDecisionInbox key={familyId ?? 'signed-out'} summary={summary} />
+      )}
 
       <DashboardSection
         title="Needs your attention"
