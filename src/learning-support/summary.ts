@@ -1,4 +1,5 @@
 import type { Assignment, CalendarEvent, Student } from '../types.ts';
+import { calendarDayForTimestamp } from '../calendar/date.ts';
 
 /**
  * This is a READ-ONLY view of ALREADY AVAILABLE family state.
@@ -19,7 +20,7 @@ export interface LearningSupportCard {
   person: string | null;
   dueDate: string | null;
   sourceLabel: string | null;
-  href: '/schoolwork' | '/calendar';
+  href: string;
 }
 
 export interface LearningSupportSummary {
@@ -131,28 +132,9 @@ export function buildLearningSupportSummary(args: {
   for (const event of args.events) {
     // Events have explicit household ownership; unowned events are excluded.
     if (event.familyId !== args.familyId) continue;
-    // An absolute timestamp can fall on a DIFFERENT household-local date
-    // from its UTC date. Resolve it with the same browser-local calendar date
-    // that the rest of Family OS uses. A timestamp without an offset is local.
-    // Validate the original calendar date and clock fields before parsing:
-    // JavaScript Date silently normalizes impossible dates/times otherwise.
-    const match = typeof event.start === 'string'
-      ? event.start.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-](\d{2}):(\d{2}))?$/)
-      : null;
-    const validDate = match && asVerifiedDate(match[1]);
-    const hours = match ? Number(match[2]) : -1;
-    const minutes = match ? Number(match[3]) : -1;
-    const seconds = match?.[4] ? Number(match[4]) : 0;
-    const offsetHours = match?.[6] ? Number(match[6]) : 0;
-    const offsetMinutes = match?.[7] ? Number(match[7]) : 0;
-    const clockValid = hours >= 0 && hours <= 23 &&
-      minutes >= 0 && minutes <= 59 && seconds >= 0 && seconds <= 59 &&
-      offsetHours >= 0 && offsetHours <= 14 &&
-      offsetMinutes >= 0 && offsetMinutes <= 59 &&
-      (offsetHours < 14 || offsetMinutes === 0);
-    const timestamp = validDate && clockValid ? new Date(event.start) : null;
-    const date = timestamp && Number.isFinite(timestamp.getTime())
-      ? localDateISO(timestamp) : null;
+    // Reuse Calendar's own time-zone-aware date parsing so a click-through
+    // always points to the same local calendar day.
+    const date = calendarDayForTimestamp(event.start);
     const base: Omit<LearningSupportCard, 'bucket'> = {
       id: 'event:' + event.id,
       kind: 'event',
@@ -163,7 +145,7 @@ export function buildLearningSupportSummary(args: {
       sourceLabel: event.provider === 'google'
         ? 'Calendar entry (Google-labeled; origin not independently verified)'
         : 'Family calendar entry',
-      href: '/calendar',
+      href: date ? '/calendar?day=' + date : '/calendar',
     };
 
     if (!date) {
@@ -191,10 +173,4 @@ export function buildLearningSupportSummary(args: {
   };
 }
 
-export function localDateISO(date: Date): string {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
-}
+export { localDateISO } from '../calendar/date.ts';
