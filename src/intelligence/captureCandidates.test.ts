@@ -162,3 +162,26 @@ test('pasted-message fingerprint is stable, omits raw text, and varies by source
   assert.match(first, /^pasted-sha256-[0-9a-f]{64}$/);
   assert.ok(!first.includes('Permission slip'));
 });
+
+test('event times are never fabricated; missing or invalid clocks need correction', () => {
+  for (const eventTime of [undefined, '', '9 AM', '25:90']) {
+    const candidate = proposeSchoolEmailCandidate(
+      email('calendar_event', {
+        eventTitle: 'Field day', eventDate: '2026-10-22', eventTime,
+      }),
+      'family-a', students,
+    );
+    assert.ok(candidate);
+    assert.equal(candidate.reviewStatus, 'needs_correction');
+    assert.equal(candidate.proposedFields.time, null);
+    assert.match(candidate.issues.join(' '), /real event time/);
+  }
+  const valid = proposeSchoolEmailCandidate(
+    email('calendar_event', {
+      eventTitle: 'Field day', eventDate: '2026-10-22', eventTime: '14:30',
+    }), 'family-a', students,
+  );
+  assert.ok(valid);
+  assert.equal(valid.proposedFields.time, '14:30');
+  assert.equal(valid.reviewStatus, 'ready_for_review');
+});
