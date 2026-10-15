@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
+import type { CalendarEvent } from '../types';
 
 import {
   MapPin,
