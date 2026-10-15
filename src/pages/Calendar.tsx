@@ -1,7 +1,8 @@
 
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { CalendarEvent, Assignment, Status } from '../types';
+import type { CalendarEvent } from '../types';
+
 import {
   MapPin,
   Clock,
@@ -23,19 +24,12 @@ import {
   MicOff,
 } from 'lucide-react';
 import { useFamily } from '../FamilyContext';
+import { useLocation } from 'react-router-dom';
+import { isValidDateKey, localDateISO, parseLocalCalendarDatetime } from '../calendar/date';
+import { buildScopedCalendar, type CalendarViewItem } from '../calendar/scopedView';
 import { useSpeechInput } from '../hooks/useSpeechInput';
 
-interface MergedItem {
-  id: string;
-  type: 'event' | 'assignment';
-  title: string;
-  start: string;
-  end?: string;
-  location?: string;
-  category?: string;
-  isDone?: boolean;
-  provider?: 'internal' | 'google';
-}
+type MergedItem = CalendarViewItem;
 
 // ── Month Grid ────────────────────────────────────────────────────────────────
 
@@ -57,7 +51,7 @@ interface MonthGridProps {
 const MonthGrid: React.FC<MonthGridProps> = ({
   viewMonth, onPrev, onNext, groupedItems, selectedDay, onSelectDay,
 }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = localDateISO(new Date());
   const year  = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
 
@@ -71,7 +65,7 @@ const MonthGrid: React.FC<MonthGridProps> = ({
     // Leading days from prev month
     for (let i = firstDayOfMonth - 1; i >= 0; i--) {
       const d = new Date(year, month - 1, daysInPrevMonth - i);
-      result.push({ dateStr: d.toISOString().split('T')[0], inMonth: false });
+      result.push({ dateStr: localDateISO(d), inMonth: false });
     }
     // Current month
     for (let d = 1; d <= daysInMonth; d++) {
@@ -260,6 +254,8 @@ const Calendar: React.FC = () => {
   const events = state.events;
   const assignments = state.assignments;
   const isGoogleLinked = state.isGoogleLinked;
+  const familyId = state.currentUser?.familyId ?? null;
+  const location = useLocation();
 
   const [view, setView] = useState<CalendarView>('month');
   const [viewMonth, setViewMonth] = useState(() => {
@@ -267,8 +263,6 @@ const Calendar: React.FC = () => {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncComplete, setSyncComplete] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [eventFormError, setEventFormError] = useState<string | null>(null);
   const [eventTitleValue, setEventTitleValue] = useState('');
@@ -281,7 +275,6 @@ const Calendar: React.FC = () => {
     onTranscript: (t) => setEventTitleValue(t),
     onFinalTranscript: (t) => setEventTitleValue(t),
   });
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Chat parser ────────────────────────────────────────────────────────
   const [chatParserOpen, setChatParserOpen] = useState(false);
@@ -292,46 +285,27 @@ const Calendar: React.FC = () => {
   }> | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
 
+  // Group only same-family records by local calendar dates. Legacy
+  // assignments must join through a known, family-owned student.
+  const { groupedItems, dates, invalidDateCount } = useMemo(
+    () => buildScopedCalendar({
+      familyId,
+      students: state.students,
+      assignments: state.assignments,
+      events: state.events,
+    }),
+    [familyId, state.students, state.assignments, state.events],
+  );
+
+  // A Learning Support card links to the correct selected calendar day.
   useEffect(() => {
-    return () => {
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-    };
-  }, []);
-
-  const mergedItems = useMemo(() => {
-    const eventItems: MergedItem[] = events.map(e => ({
-      id: e.id,
-      type: 'event',
-      title: e.title,
-      start: e.start,
-      end: e.end,
-      location: e.location,
-      provider: e.provider || 'internal'
-    }));
-
-    const assignmentItems: MergedItem[] = assignments.map(a => ({
-      id: a.id,
-      type: 'assignment',
-      title: a.title,
-      start: `${a.dueDate}T23:59`,
-      category: a.subject,
-      isDone: a.status === Status.DONE,
-      provider: 'internal'
-    }));
-
-    return [...eventItems, ...assignmentItems].sort((a, b) => a.start.localeCompare(b.start));
-  }, [events, assignments]);
-
-  const groupedItems = useMemo(() => {
-    return mergedItems.reduce((acc, item) => {
-      const date = item.start.split('T')[0];
-      if (!acc[date]) acc[date] = [];
-      acc[date].push(item);
-      return acc;
-    }, {} as Record<string, MergedItem[]>);
-  }, [mergedItems]);
-
-  const dates = Object.keys(groupedItems).sort();
+    const day = new URLSearchParams(location.search).get('day');
+    if (!isValidDateKey(day)) return;
+    setSelectedDay(day);
+    const [year, month] = day.split('-').map(Number);
+    setViewMonth(new Date(year, month - 1, 1));
+    setView('month');
+  }, [location.search]);
 
   const parseChatText = async () => {
     if (!chatText.trim()) return;
@@ -342,7 +316,7 @@ const Calendar: React.FC = () => {
       const apiKey = import.meta.env.VITE_API_KEY || '';
       if (!apiKey) throw new Error('No API key');
       const ai = new GoogleGenAI({ apiKey });
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = localDateISO(new Date());
 
       const prompt = `Extract ALL events, dates, and appointments from this message/chat thread.
 Today's date: ${todayStr}
@@ -371,7 +345,7 @@ Only return the JSON array. No explanation.`;
         return;
       }
 
-      setChatResults(parsed.map(e => ({ ...e, selected: true })));
+      setChatResults(parsed.map(e => ({ ...e, selected: false })));
     } catch {
       setChatError('Could not parse the message. Check your Gemini API key.');
     } finally {
@@ -381,17 +355,26 @@ Only return the JSON array. No explanation.`;
 
   const addChatEvents = () => {
     if (!chatResults) return;
+    if (!familyId) { setChatError('Please sign in to a family to add an event.'); return; }
+    const selected = chatResults.filter(r => r.selected);
+    if (selected.some(r => !r.title?.trim() || !isValidDateKey(r.date) || !r.time || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) || !parseLocalCalendarDatetime(`${r.date}T${r.time}`))) {
+      setChatError('Confirm a valid title, date, and time for each selected event.');
+      return;
+    }
     const now = new Date().toISOString();
-    chatResults.filter(r => r.selected).forEach(e => {
-      const start = e.time ? `${e.date}T${e.time}` : `${e.date}T09:00`;
-      const [h, m] = (e.time || '09:00').split(':').map(Number);
-      const endHour = String(Math.min(h + 1, 23)).padStart(2, '0');
-      const end = e.time ? `${e.date}T${endHour}:${String(m).padStart(2, '0')}` : `${e.date}T10:00`;
+    selected.forEach(e => {
+      const start = `${e.date}T${e.time}`;
+      // A one-hour event can cross midnight or DST; do not clamp the hour
+      // and accidentally save an end time equal to its start time.
+      const startInstant = parseLocalCalendarDatetime(start);
+      if (!startInstant) return;
+      const endInstant = new Date(startInstant.getTime() + 60 * 60 * 1000);
+      const end = `${localDateISO(endInstant)}T${String(endInstant.getHours()).padStart(2, '0')}:${String(endInstant.getMinutes()).padStart(2, '0')}`;
       dispatch({
         type: 'ADD_EVENT',
         payload: {
           id: `chat-${Date.now()}-${Math.random()}`,
-          familyId: 'fam-1',
+          familyId,
           title: e.title,
           start,
           end,
@@ -405,38 +388,19 @@ Only return the JSON array. No explanation.`;
     setChatResults(null);
   };
 
-  const handleSync = () => {
-    if (!isGoogleLinked) return;
-    setIsSyncing(true);
-    syncTimeoutRef.current = setTimeout(() => {
-      const now = new Date().toISOString();
-      const googleEvent: CalendarEvent = {
-        id: `google-${Date.now()}`,
-        familyId: 'fam-1',
-        title: 'Work Project Sync (Google)',
-        start: `${new Date().toISOString().split('T')[0]}T14:00`,
-        end: `${new Date().toISOString().split('T')[0]}T15:00`,
-        location: 'Google Meet',
-        provider: 'google',
-        createdAt: now,
-      };
-      const filtered = events.filter(e => e.provider !== 'google');
-      dispatch({ type: 'HYDRATE', payload: { events: [...filtered, googleEvent] } });
-      setIsSyncing(false);
-      setSyncComplete(true);
-      syncTimeoutRef.current = setTimeout(() => setSyncComplete(false), 3000);
-    }, 2000);
-  };
-
   const handleCreateEvent = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const date = formData.get('date') as string;
     const startTime = formData.get('startTime') as string;
     const endTime = formData.get('endTime') as string;
-    const syncToGoogle = formData.get('syncToGoogle') === 'on';
     const now = new Date().toISOString();
 
+    if (!familyId) { setEventFormError('Please sign in to your family to create events.'); return; }
+    if (!isValidDateKey(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime)) {
+      setEventFormError('Provide a valid date and start/end times.');
+      return;
+    }
     if (endTime && startTime && endTime <= startTime) {
       setEventFormError('End time must be after start time.');
       return;
@@ -445,12 +409,13 @@ Only return the JSON array. No explanation.`;
 
     const newEvent: CalendarEvent = {
       id: `e-${Date.now()}`,
-      familyId: 'fam-1',
+      familyId,
       title: eventTitleValue || formData.get('title') as string,
       start: `${date}T${startTime}`,
       end: `${date}T${endTime}`,
       location: formData.get('location') as string,
-      provider: syncToGoogle ? 'google' : 'internal',
+      // Creating a local event does not constitute a Google Calendar sync.
+      provider: 'internal',
       createdAt: now,
     };
 
@@ -488,24 +453,9 @@ Only return the JSON array. No explanation.`;
           </div>
 
           {isGoogleLinked && (
-            <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all shadow-sm text-sm ${
-                syncComplete
-                  ? 'bg-green-50 text-green-600 border border-green-100'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {isSyncing ? (
-                <RefreshCw size={16} className="animate-spin" />
-              ) : syncComplete ? (
-                <CheckCircle2 size={16} />
-              ) : (
-                <RefreshCw size={16} />
-              )}
-              {isSyncing ? 'Syncing...' : syncComplete ? 'Synced' : 'Sync Google'}
-            </button>
+            <span className="text-xs text-slate-500 px-3 py-2 border border-slate-200 rounded-lg">
+              Google Calendar sync not configured in this demo
+            </span>
           )}
           <button
             onClick={() => setChatParserOpen(true)}
@@ -527,6 +477,11 @@ Only return the JSON array. No explanation.`;
       {/* Month view */}
       {view === 'month' && (
         <div className="space-y-4">
+          {invalidDateCount > 0 && (
+            <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+              {invalidDateCount} calendar or schoolwork {invalidDateCount === 1 ? 'entry has' : 'entries have'} an invalid date and cannot be placed on the calendar. Review the source records.
+            </p>
+          )}
           <MonthGrid
             viewMonth={viewMonth}
             onPrev={() => setViewMonth(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
@@ -699,7 +654,7 @@ Only return the JSON array. No explanation.`;
                   type="date"
                   name="date"
                   required
-                  defaultValue={new Date().toISOString().split('T')[0]}
+                  defaultValue={localDateISO(new Date())}
                   className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
                 />
               </div>
@@ -727,19 +682,9 @@ Only return the JSON array. No explanation.`;
               </div>
 
               {isGoogleLinked && (
-                <div className="pt-2">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="syncToGoogle"
-                      className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="flex items-center gap-1.5">
-                      <Globe size={14} className="text-blue-500" />
-                      <span className="text-sm font-semibold text-slate-700">Post to Google Calendar</span>
-                    </div>
-                  </label>
-                </div>
+                <p className="text-xs text-slate-500">
+                  Events are saved only inside Family OS; Google Calendar publishing is not connected.
+                </p>
               )}
 
               {eventFormError && (
@@ -803,18 +748,21 @@ Only return the JSON array. No explanation.`;
                 </>
               ) : (
                 <>
+                  {chatError && <p className="text-sm text-red-600" role="alert">{chatError}</p>}
+                  <p className="text-xs text-slate-600">AI results are not verified. Check each date and time, then explicitly select events to add. Nothing is added automatically.</p>
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle2 size={16} className="text-green-500" />
                     <p className="text-sm font-semibold text-slate-900">Found {chatResults.length} event{chatResults.length !== 1 ? 's' : ''}. Select which to add:</p>
                   </div>
                   <div className="space-y-2">
                     {chatResults.map((result, i) => (
-                      <label
+                      <div
                         key={i}
-                        className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${result.selected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200'}`}
+                        className={`flex items-start gap-3 p-3 rounded-xl border transition-colors ${result.selected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200'}`}
                       >
                         <input
                           type="checkbox"
+                          aria-label={`Select ${result.title || 'untitled extracted event'} for calendar addition`}
                           checked={result.selected}
                           onChange={() => setChatResults(prev => prev!.map((r, j) => j === i ? { ...r, selected: !r.selected } : r))}
                           className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
@@ -822,12 +770,30 @@ Only return the JSON array. No explanation.`;
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-slate-900 text-sm">{result.title}</p>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            {result.date}
-                            {result.time && ` · ${result.time}`}
-                            {result.location && ` · 📍 ${result.location}`}
+                            {result.location || 'No location supplied'} · Review date and time before adding
                           </p>
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            <label className="text-xs text-slate-700 font-semibold">
+                              Date
+                              <input
+                                type="date"
+                                value={result.date || ''}
+                                onChange={e => setChatResults(prev => prev!.map((r, j) => j === i ? { ...r, date: e.target.value } : r))}
+                                className="block border border-slate-200 rounded-lg px-2 py-1 mt-1"
+                              />
+                            </label>
+                            <label className="text-xs text-slate-700 font-semibold">
+                              Time (required)
+                              <input
+                                type="time"
+                                value={result.time || ''}
+                                onChange={e => setChatResults(prev => prev!.map((r, j) => j === i ? { ...r, time: e.target.value } : r))}
+                                className="block border border-slate-200 rounded-lg px-2 py-1 mt-1"
+                              />
+                            </label>
+                          </div>
                         </div>
-                      </label>
+                      </div>
                     ))}
                   </div>
                   <div className="flex gap-3 pt-2">
