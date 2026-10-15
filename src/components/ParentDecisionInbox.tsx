@@ -31,7 +31,7 @@ const ParentDecisionInbox: React.FC<{ summary: LearningSupportSummary }> = ({ su
     [allowed, actorFamilyId, summary],
   );
 
-  // These drafts are intentionally NOT saved to localStorage, Supabase or any
+  // These drafts are intentionally NOT saved to browser persistence or any
   // integration. They are for evaluating the human decision UX only.
   const [drafts, setDrafts] = useState<Record<string, DraftReviewDecision>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
