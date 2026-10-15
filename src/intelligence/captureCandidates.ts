@@ -143,7 +143,7 @@ export function proposeSchoolEmailCandidate(
 
   // Never manufacture a 09:00 start or a 10:00 finish for an event.
   const rawTime = kind === 'event' ? cleanText(d.eventTime) : null;
-  const time = rawTime && /^([01]\\d|2[0-3]):[0-5]\\d$/.test(rawTime) ? rawTime : null;
+  const time = rawTime && /^([01]\d|2[0-3]):[0-5]\d$/.test(rawTime) ? rawTime : null;
   if (kind === 'event' && !time) {
     issues.push('Confirm a real event time; do not assume 09:00.');
   }
