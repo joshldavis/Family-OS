@@ -126,7 +126,7 @@ const ParentDecisionInbox: React.FC<{ summary: LearningSupportSummary }> = ({ su
                     Evidence: {candidate.provenance}. The record origin has not been independently verified.
                   </p>
                   <Link to={candidate.sourceHref} className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-700 hover:underline">
-                    <Eye size={15} aria-hidden="true" /> Open source record <ArrowRight size={14} aria-hidden="true" />
+                    <Eye size={15} aria-hidden="true" /> Open {candidate.kind === 'assignment' ? 'Schoolwork' : 'Calendar'} module <ArrowRight size={14} aria-hidden="true" />
                   </Link>
                 </div>
                 {candidate.needsConfirmedDate && (
