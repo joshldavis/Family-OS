@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildScopedCalendar } from './scopedView.ts';
+import { localDateISO } from './date.ts';
 import type { Assignment, CalendarEvent, Student, Status } from '../types.ts';
 
 const students: Student[] = [
@@ -46,7 +47,7 @@ test('Calendar and Learning Support use identical local date conversion', () => 
     events: [event('late', 'family-A', stamp)],
   });
   const day = [...result.dates][0];
-  assert.equal(day, new Date(stamp).toLocaleDateString('en-CA').split('/').join('-').length === 10 ? day : day);
+  assert.equal(day, localDateISO(new Date(stamp)));
   if (process.env.TZ === 'America/New_York') assert.equal(day, '2026-10-15');
 });
 
