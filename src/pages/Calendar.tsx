@@ -1,7 +1,7 @@
 
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { CalendarEvent, Assignment, Status } from '../types';
+
 import {
   MapPin,
   Clock,
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useFamily } from '../FamilyContext';
 import { useLocation } from 'react-router-dom';
-import { isValidDateKey, localDateISO } from '../calendar/date';
+import { isValidDateKey, localDateISO, parseLocalCalendarDatetime } from '../calendar/date';
 import { buildScopedCalendar, type CalendarViewItem } from '../calendar/scopedView';
 import { useSpeechInput } from '../hooks/useSpeechInput';
 
@@ -262,8 +262,6 @@ const Calendar: React.FC = () => {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncComplete, setSyncComplete] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [eventFormError, setEventFormError] = useState<string | null>(null);
   const [eventTitleValue, setEventTitleValue] = useState('');
@@ -276,7 +274,6 @@ const Calendar: React.FC = () => {
     onTranscript: (t) => setEventTitleValue(t),
     onFinalTranscript: (t) => setEventTitleValue(t),
   });
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Chat parser ────────────────────────────────────────────────────────
   const [chatParserOpen, setChatParserOpen] = useState(false);
@@ -286,12 +283,6 @@ const Calendar: React.FC = () => {
     title: string; date: string; time?: string; location?: string; selected: boolean;
   }> | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-    };
-  }, []);
 
   // Group only same-family records by local calendar dates. Legacy
   // assignments must join through a known, family-owned student.
@@ -365,16 +356,19 @@ Only return the JSON array. No explanation.`;
     if (!chatResults) return;
     if (!familyId) { setChatError('Please sign in to a family to add an event.'); return; }
     const selected = chatResults.filter(r => r.selected);
-    if (selected.some(r => !r.title?.trim() || !isValidDateKey(r.date) || !r.time || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time))) {
+    if (selected.some(r => !r.title?.trim() || !isValidDateKey(r.date) || !r.time || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) || !parseLocalCalendarDatetime(`${r.date}T${r.time}`))) {
       setChatError('Confirm a valid title, date, and time for each selected event.');
       return;
     }
     const now = new Date().toISOString();
     selected.forEach(e => {
       const start = `${e.date}T${e.time}`;
-      const [h, m] = e.time!.split(':').map(Number);
-      const endHour = String(Math.min(h + 1, 23)).padStart(2, '0');
-      const end = `${e.date}T${endHour}:${String(m).padStart(2, '0')}`;
+      // A one-hour event can cross midnight or DST; do not clamp the hour
+      // and accidentally save an end time equal to its start time.
+      const startInstant = parseLocalCalendarDatetime(start);
+      if (!startInstant) return;
+      const endInstant = new Date(startInstant.getTime() + 60 * 60 * 1000);
+      const end = `${localDateISO(endInstant)}T${String(endInstant.getHours()).padStart(2, '0')}:${String(endInstant.getMinutes()).padStart(2, '0')}`;
       dispatch({
         type: 'ADD_EVENT',
         payload: {
@@ -393,36 +387,12 @@ Only return the JSON array. No explanation.`;
     setChatResults(null);
   };
 
-  const handleSync = () => {
-    if (!isGoogleLinked || !familyId) return;
-    setIsSyncing(true);
-    syncTimeoutRef.current = setTimeout(() => {
-      const now = new Date().toISOString();
-      const googleEvent: CalendarEvent = {
-        id: `google-${Date.now()}`,
-        familyId,
-        title: 'Work Project Sync (Google)',
-        start: `${localDateISO(new Date())}T14:00`,
-        end: `${localDateISO(new Date())}T15:00`,
-        location: 'Google Meet',
-        provider: 'google',
-        createdAt: now,
-      };
-      const filtered = events.filter(e => e.familyId === familyId && e.provider !== 'google');
-      dispatch({ type: 'HYDRATE', payload: { events: [...filtered, googleEvent] } });
-      setIsSyncing(false);
-      setSyncComplete(true);
-      syncTimeoutRef.current = setTimeout(() => setSyncComplete(false), 3000);
-    }, 2000);
-  };
-
   const handleCreateEvent = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const date = formData.get('date') as string;
     const startTime = formData.get('startTime') as string;
     const endTime = formData.get('endTime') as string;
-    const syncToGoogle = formData.get('syncToGoogle') === 'on';
     const now = new Date().toISOString();
 
     if (!familyId) { setEventFormError('Please sign in to your family to create events.'); return; }
@@ -443,7 +413,8 @@ Only return the JSON array. No explanation.`;
       start: `${date}T${startTime}`,
       end: `${date}T${endTime}`,
       location: formData.get('location') as string,
-      provider: syncToGoogle ? 'google' : 'internal',
+      // Creating a local event does not constitute a Google Calendar sync.
+      provider: 'internal',
       createdAt: now,
     };
 
@@ -481,24 +452,9 @@ Only return the JSON array. No explanation.`;
           </div>
 
           {isGoogleLinked && (
-            <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all shadow-sm text-sm ${
-                syncComplete
-                  ? 'bg-green-50 text-green-600 border border-green-100'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {isSyncing ? (
-                <RefreshCw size={16} className="animate-spin" />
-              ) : syncComplete ? (
-                <CheckCircle2 size={16} />
-              ) : (
-                <RefreshCw size={16} />
-              )}
-              {isSyncing ? 'Syncing...' : syncComplete ? 'Synced' : 'Sync Google'}
-            </button>
+            <span className="text-xs text-slate-500 px-3 py-2 border border-slate-200 rounded-lg">
+              Google Calendar sync not configured in this demo
+            </span>
           )}
           <button
             onClick={() => setChatParserOpen(true)}
@@ -725,19 +681,9 @@ Only return the JSON array. No explanation.`;
               </div>
 
               {isGoogleLinked && (
-                <div className="pt-2">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="syncToGoogle"
-                      className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="flex items-center gap-1.5">
-                      <Globe size={14} className="text-blue-500" />
-                      <span className="text-sm font-semibold text-slate-700">Post to Google Calendar</span>
-                    </div>
-                  </label>
-                </div>
+                <p className="text-xs text-slate-500">
+                  Events are saved only inside Family OS; Google Calendar publishing is not connected.
+                </p>
               )}
 
               {eventFormError && (
