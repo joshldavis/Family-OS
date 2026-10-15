@@ -26,6 +26,8 @@ export interface TrustedSchoolProposal {
   reviewStatus: 'ready_for_review' | 'needs_correction';
   /** Captured consent from the verified household's source connection. */
   consentCapturedAt: string | null;
+  /** Must be checked freshly so consent revocation invalidates the preview. */
+  consentStatus: 'active' | 'revoked' | 'pending';
   /** Explicit corrections/confirmations already trusted and stored server-side. */
   titleConfirmedByParent: boolean;
   studentConfirmedByParent: boolean;
@@ -97,7 +99,7 @@ export function trustedProposalRevision(source: Omit<TrustedSchoolProposal, 'rev
     'family-os-school-proposal-v1',
     source.id, source.familyId, source.sourceSystem, source.sourceRefDigest,
     source.kind, source.title, source.date, source.studentId,
-    source.reviewStatus, source.consentCapturedAt,
+    source.reviewStatus, source.consentCapturedAt, source.consentStatus,
     source.titleConfirmedByParent, source.studentConfirmedByParent,
     source.dateConfirmedByParent,
   ]);
@@ -172,7 +174,7 @@ export async function previewTrustedSchoolAction(
   if (!/^(?:pasted-sha256-)?[0-9a-f]{64}$/.test(proposal.sourceRefDigest)) {
     return reject('source_not_found');
   }
-  if (!proposal.consentCapturedAt ||
+  if (proposal.consentStatus !== 'active' || !proposal.consentCapturedAt ||
       !Number.isFinite(Date.parse(proposal.consentCapturedAt))) {
     return reject('consent_required');
   }
