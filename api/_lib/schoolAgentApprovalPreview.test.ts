@@ -16,6 +16,7 @@ const sourceData: Omit<TrustedSchoolProposal, 'revision'> = {
   kind: 'assignment', title: 'Reading worksheet',
   date: '2026-10-21', studentId: 'student-a', reviewStatus: 'ready_for_review',
   consentCapturedAt: '2026-10-14T18:00:00.000Z',
+  consentStatus: 'active',
   titleConfirmedByParent: true, studentConfirmedByParent: true,
   dateConfirmedByParent: true,
 };
@@ -139,6 +140,8 @@ test('stale visible revision and tampered server source revision fail closed', a
 test('consent, date, student and parent confirmations gate any future approval', async () => {
   for(const changes of [
     { consentCapturedAt: null },
+    { consentStatus: 'revoked' as const },
+    { consentStatus: 'pending' as const },
     { consentCapturedAt: 'not-an-iso-date' },
     { reviewStatus: 'needs_correction' as const },
     { date: null }, { date: '2026-02-29' },
@@ -150,7 +153,7 @@ test('consent, date, student and parent confirmations gate any future approval',
     const result = await run(testAdapters({ async getProposal() { return source; } }),
       { expectedRevision: source.revision });
     assert.equal(result.ok, false, JSON.stringify(changes));
-    if ('consentCapturedAt' in changes) assert.equal(result.ok || result.reason === 'consent_required', true);
+    if ('consentCapturedAt' in changes || 'consentStatus' in changes) assert.equal(!result.ok && result.reason === 'consent_required', true);
   }
 });
 
