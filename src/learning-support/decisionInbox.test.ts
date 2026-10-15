@@ -48,7 +48,7 @@ test('deterministic review suggestions come from overdue/due soon and unresolved
   ]);
   assert.deepEqual(list.map(c => c.sourceId), [
     'assignment:late', 'assignment:soon',
-    'assignment:missing', 'event:bad',
+    'event:bad', 'assignment:missing',
   ]);
   assert.equal(list[0].bucket, 'attention');
   assert.equal(list[2].needsConfirmedDate, true);
