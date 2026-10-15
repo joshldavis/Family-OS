@@ -23,19 +23,12 @@ import {
   MicOff,
 } from 'lucide-react';
 import { useFamily } from '../FamilyContext';
+import { useLocation } from 'react-router-dom';
+import { isValidDateKey, localDateISO } from '../calendar/date';
+import { buildScopedCalendar, type CalendarViewItem } from '../calendar/scopedView';
 import { useSpeechInput } from '../hooks/useSpeechInput';
 
-interface MergedItem {
-  id: string;
-  type: 'event' | 'assignment';
-  title: string;
-  start: string;
-  end?: string;
-  location?: string;
-  category?: string;
-  isDone?: boolean;
-  provider?: 'internal' | 'google';
-}
+type MergedItem = CalendarViewItem;
 
 // ── Month Grid ────────────────────────────────────────────────────────────────
 
@@ -57,7 +50,7 @@ interface MonthGridProps {
 const MonthGrid: React.FC<MonthGridProps> = ({
   viewMonth, onPrev, onNext, groupedItems, selectedDay, onSelectDay,
 }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = localDateISO(new Date());
   const year  = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
 
@@ -71,7 +64,7 @@ const MonthGrid: React.FC<MonthGridProps> = ({
     // Leading days from prev month
     for (let i = firstDayOfMonth - 1; i >= 0; i--) {
       const d = new Date(year, month - 1, daysInPrevMonth - i);
-      result.push({ dateStr: d.toISOString().split('T')[0], inMonth: false });
+      result.push({ dateStr: localDateISO(d), inMonth: false });
     }
     // Current month
     for (let d = 1; d <= daysInMonth; d++) {
@@ -260,6 +253,8 @@ const Calendar: React.FC = () => {
   const events = state.events;
   const assignments = state.assignments;
   const isGoogleLinked = state.isGoogleLinked;
+  const familyId = state.currentUser?.familyId ?? null;
+  const location = useLocation();
 
   const [view, setView] = useState<CalendarView>('month');
   const [viewMonth, setViewMonth] = useState(() => {
@@ -298,40 +293,27 @@ const Calendar: React.FC = () => {
     };
   }, []);
 
-  const mergedItems = useMemo(() => {
-    const eventItems: MergedItem[] = events.map(e => ({
-      id: e.id,
-      type: 'event',
-      title: e.title,
-      start: e.start,
-      end: e.end,
-      location: e.location,
-      provider: e.provider || 'internal'
-    }));
+  // Group only same-family records by local calendar dates. Legacy
+  // assignments must join through a known, family-owned student.
+  const { groupedItems, dates, invalidDateCount } = useMemo(
+    () => buildScopedCalendar({
+      familyId,
+      students: state.students,
+      assignments: state.assignments,
+      events: state.events,
+    }),
+    [familyId, state.students, state.assignments, state.events],
+  );
 
-    const assignmentItems: MergedItem[] = assignments.map(a => ({
-      id: a.id,
-      type: 'assignment',
-      title: a.title,
-      start: `${a.dueDate}T23:59`,
-      category: a.subject,
-      isDone: a.status === Status.DONE,
-      provider: 'internal'
-    }));
-
-    return [...eventItems, ...assignmentItems].sort((a, b) => a.start.localeCompare(b.start));
-  }, [events, assignments]);
-
-  const groupedItems = useMemo(() => {
-    return mergedItems.reduce((acc, item) => {
-      const date = item.start.split('T')[0];
-      if (!acc[date]) acc[date] = [];
-      acc[date].push(item);
-      return acc;
-    }, {} as Record<string, MergedItem[]>);
-  }, [mergedItems]);
-
-  const dates = Object.keys(groupedItems).sort();
+  // A Learning Support card links to the correct selected calendar day.
+  useEffect(() => {
+    const day = new URLSearchParams(location.search).get('day');
+    if (!isValidDateKey(day)) return;
+    setSelectedDay(day);
+    const [year, month] = day.split('-').map(Number);
+    setViewMonth(new Date(year, month - 1, 1));
+    setView('month');
+  }, [location.search]);
 
   const parseChatText = async () => {
     if (!chatText.trim()) return;
@@ -342,7 +324,7 @@ const Calendar: React.FC = () => {
       const apiKey = import.meta.env.VITE_API_KEY || '';
       if (!apiKey) throw new Error('No API key');
       const ai = new GoogleGenAI({ apiKey });
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = localDateISO(new Date());
 
       const prompt = `Extract ALL events, dates, and appointments from this message/chat thread.
 Today's date: ${todayStr}
@@ -371,7 +353,7 @@ Only return the JSON array. No explanation.`;
         return;
       }
 
-      setChatResults(parsed.map(e => ({ ...e, selected: true })));
+      setChatResults(parsed.map(e => ({ ...e, selected: false })));
     } catch {
       setChatError('Could not parse the message. Check your Gemini API key.');
     } finally {
@@ -381,17 +363,23 @@ Only return the JSON array. No explanation.`;
 
   const addChatEvents = () => {
     if (!chatResults) return;
+    if (!familyId) { setChatError('Please sign in to a family to add an event.'); return; }
+    const selected = chatResults.filter(r => r.selected);
+    if (selected.some(r => !r.title?.trim() || !isValidDateKey(r.date) || !r.time || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(r.time))) {
+      setChatError('Confirm a valid title, date, and time for each selected event.');
+      return;
+    }
     const now = new Date().toISOString();
-    chatResults.filter(r => r.selected).forEach(e => {
-      const start = e.time ? `${e.date}T${e.time}` : `${e.date}T09:00`;
-      const [h, m] = (e.time || '09:00').split(':').map(Number);
+    selected.forEach(e => {
+      const start = `${e.date}T${e.time}`;
+      const [h, m] = e.time!.split(':').map(Number);
       const endHour = String(Math.min(h + 1, 23)).padStart(2, '0');
-      const end = e.time ? `${e.date}T${endHour}:${String(m).padStart(2, '0')}` : `${e.date}T10:00`;
+      const end = `${e.date}T${endHour}:${String(m).padStart(2, '0')}`;
       dispatch({
         type: 'ADD_EVENT',
         payload: {
           id: `chat-${Date.now()}-${Math.random()}`,
-          familyId: 'fam-1',
+          familyId,
           title: e.title,
           start,
           end,
@@ -406,21 +394,21 @@ Only return the JSON array. No explanation.`;
   };
 
   const handleSync = () => {
-    if (!isGoogleLinked) return;
+    if (!isGoogleLinked || !familyId) return;
     setIsSyncing(true);
     syncTimeoutRef.current = setTimeout(() => {
       const now = new Date().toISOString();
       const googleEvent: CalendarEvent = {
         id: `google-${Date.now()}`,
-        familyId: 'fam-1',
+        familyId,
         title: 'Work Project Sync (Google)',
-        start: `${new Date().toISOString().split('T')[0]}T14:00`,
-        end: `${new Date().toISOString().split('T')[0]}T15:00`,
+        start: `${localDateISO(new Date())}T14:00`,
+        end: `${localDateISO(new Date())}T15:00`,
         location: 'Google Meet',
         provider: 'google',
         createdAt: now,
       };
-      const filtered = events.filter(e => e.provider !== 'google');
+      const filtered = events.filter(e => e.familyId === familyId && e.provider !== 'google');
       dispatch({ type: 'HYDRATE', payload: { events: [...filtered, googleEvent] } });
       setIsSyncing(false);
       setSyncComplete(true);
@@ -437,6 +425,11 @@ Only return the JSON array. No explanation.`;
     const syncToGoogle = formData.get('syncToGoogle') === 'on';
     const now = new Date().toISOString();
 
+    if (!familyId) { setEventFormError('Please sign in to your family to create events.'); return; }
+    if (!isValidDateKey(date) || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(startTime) || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(endTime)) {
+      setEventFormError('Provide a valid date and start/end times.');
+      return;
+    }
     if (endTime && startTime && endTime <= startTime) {
       setEventFormError('End time must be after start time.');
       return;
@@ -445,7 +438,7 @@ Only return the JSON array. No explanation.`;
 
     const newEvent: CalendarEvent = {
       id: `e-${Date.now()}`,
-      familyId: 'fam-1',
+      familyId,
       title: eventTitleValue || formData.get('title') as string,
       start: `${date}T${startTime}`,
       end: `${date}T${endTime}`,
@@ -527,6 +520,11 @@ Only return the JSON array. No explanation.`;
       {/* Month view */}
       {view === 'month' && (
         <div className="space-y-4">
+          {invalidDateCount > 0 && (
+            <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+              {invalidDateCount} calendar or schoolwork {invalidDateCount === 1 ? 'entry has' : 'entries have'} an invalid date and cannot be placed on the calendar. Review the source records.
+            </p>
+          )}
           <MonthGrid
             viewMonth={viewMonth}
             onPrev={() => setViewMonth(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
@@ -699,7 +697,7 @@ Only return the JSON array. No explanation.`;
                   type="date"
                   name="date"
                   required
-                  defaultValue={new Date().toISOString().split('T')[0]}
+                  defaultValue={localDateISO(new Date())}
                   className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
                 />
               </div>
@@ -803,6 +801,8 @@ Only return the JSON array. No explanation.`;
                 </>
               ) : (
                 <>
+                  {chatError && <p className="text-sm text-red-600" role="alert">{chatError}</p>}
+                  <p className="text-xs text-slate-600">AI results are not verified. Check each date and time, then explicitly select events to add. Nothing is added automatically.</p>
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle2 size={16} className="text-green-500" />
                     <p className="text-sm font-semibold text-slate-900">Found {chatResults.length} event{chatResults.length !== 1 ? 's' : ''}. Select which to add:</p>
@@ -823,7 +823,7 @@ Only return the JSON array. No explanation.`;
                           <p className="font-semibold text-slate-900 text-sm">{result.title}</p>
                           <p className="text-xs text-slate-500 mt-0.5">
                             {result.date}
-                            {result.time && ` · ${result.time}`}
+                            {result.time ? ` · ${result.time}` : ' · Time missing — enter to confirm'}
                             {result.location && ` · 📍 ${result.location}`}
                           </p>
                         </div>
