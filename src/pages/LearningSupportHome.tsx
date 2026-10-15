@@ -7,6 +7,7 @@ import {
 import { Role } from '../types';
 import { useFamily } from '../FamilyContext';
 import { useModeModules } from '../modes/ModeContext';
+import ParentDecisionInbox from '../components/ParentDecisionInbox';
 import { buildLearningSupportSummary, localDateISO } from '../learning-support/summary';
 import type { LearningSupportCard } from '../learning-support/summary';
 
@@ -160,6 +161,9 @@ const LearningSupportHome: React.FC = () => {
           <p className="text-xs text-slate-500 mt-1">Dates requiring confirmation</p>
         </div>
       </div>
+
+      {/* Reversible, session-only parent decision prototype: no write actions. */}
+      <ParentDecisionInbox key={familyId ?? 'signed-out'} summary={summary} />
 
       <DashboardSection
         title="Needs your attention"
