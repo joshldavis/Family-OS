@@ -154,6 +154,24 @@ test('consent, date, student and parent confirmations gate any future approval',
   }
 });
 
+test('source references must be opaque hashes, not raw school email addresses', async () => {
+  const source = proposal({ sourceRefDigest: 'teacher@school.org' });
+  const r = await run(testAdapters({
+    async getProposal() { return source; },
+  }), { expectedRevision: source.revision });
+  assert.deepEqual(r, { ok: false, reason: 'source_not_found', executed: false });
+});
+
+test('oversize or multiline assignment titles cannot enter a future write plan', async () => {
+  for(const title of ['x'.repeat(210), 'Sensitive\\nInjected note']) {
+    const source = proposal({ title });
+    const result = await run(testAdapters({
+      async getProposal() { return source; },
+    }), { expectedRevision: source.revision });
+    assert.deepEqual(result, { ok: false, reason: 'needs_parent_correction', executed: false });
+  }
+});
+
 test('sensitive behavioral categories are categorically excluded from action planning', async () => {
   for (const kind of ['behavior_observation', 'event', 'announcement', 'action'] as const) {
     const source = proposal({ kind });
