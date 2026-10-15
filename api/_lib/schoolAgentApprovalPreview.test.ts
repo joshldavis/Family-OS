@@ -163,7 +163,7 @@ test('source references must be opaque hashes, not raw school email addresses', 
 });
 
 test('oversize or multiline assignment titles cannot enter a future write plan', async () => {
-  for(const title of ['x'.repeat(210), 'Sensitive\\nInjected note']) {
+  for(const title of ['x'.repeat(210), 'Sensitive' + String.fromCharCode(10) + 'Injected note']) {
     const source = proposal({ title });
     const result = await run(testAdapters({
       async getProposal() { return source; },
