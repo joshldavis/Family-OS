@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, Clock3, Eye, ShieldCheck, Undo2, XCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, Eye, ShieldCheck, Undo2 } from 'lucide-react';
 import type { LearningSupportSummary } from '../learning-support/summary';
 import {
   deriveDecisionCandidates, isCurrentDecision, recordDraftDecision, summarizeDraftReviews,
