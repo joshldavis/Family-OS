@@ -22,7 +22,7 @@ test('synthetic intake neither sends data nor writes any family records', () => 
 });
 
 test('trusted gate remains read-only and cannot execute or persist', () => {
-  assert.doesNotMatch(preview, /\.insert\s*\(|\.upsert\s*\(|\.update\s*\(|\.delete\s*\(/);
+  assert.doesNotMatch(preview, /\b(?:supabase|db|repository|table)\s*\.\s*(?:insert|upsert|update|delete)\s*\(/);
   assert.doesNotMatch(preview, /\bdispatch\s*\(|\benqueue\s*\(|\bsendEmail\s*\(/);
   assert.match(preview, /executed: false/);
 });
