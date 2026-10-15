@@ -51,8 +51,8 @@ test('deterministic review suggestions come from overdue/due soon and unresolved
     'event:bad', 'assignment:missing',
   ]);
   assert.equal(list[0].bucket, 'attention');
-  assert.equal(list[2].needsConfirmedDate, true);
-  assert.equal(list[3].mustFixSource, true);
+  assert.equal(list.find(c => c.sourceId === 'assignment:missing')?.needsConfirmedDate, true);
+  assert.equal(list.find(c => c.sourceId === 'event:bad')?.mustFixSource, true);
   assert.equal(list[1].sourceHref, '/schoolwork');
   assert.equal(list[1].familyId, 'home-A');
 });
