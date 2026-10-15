@@ -167,6 +167,11 @@ export async function previewTrustedSchoolAction(
       proposal.revision !== trustedProposalRevision(proposal)) {
     return reject('source_changed');
   }
+  // Opaque digest requirement prevents accidentally returning raw email IDs
+  // or identifying metadata from a misconfigured source adapter.
+  if (!/^(?:pasted-sha256-)?[0-9a-f]{64}$/.test(proposal.sourceRefDigest)) {
+    return reject('source_not_found');
+  }
   if (!proposal.consentCapturedAt ||
       !Number.isFinite(Date.parse(proposal.consentCapturedAt))) {
     return reject('consent_required');
@@ -174,7 +179,7 @@ export async function previewTrustedSchoolAction(
   // Phase 1: no calendar write, behavior evaluation, diagnosis, or AI action.
   if (proposal.kind !== 'assignment') return reject('unsupported_action');
   if (proposal.reviewStatus !== 'ready_for_review' ||
-      !proposal.title.trim() || !validDate(proposal.date) ||
+      !proposal.title.trim() || proposal.title.length > 200 || /[\r\n]/.test(proposal.title) || !validDate(proposal.date) ||
       !proposal.titleConfirmedByParent || !proposal.dateConfirmedByParent ||
       !proposal.studentConfirmedByParent || !validOpaqueId(proposal.studentId)) {
     return reject('needs_parent_correction');
