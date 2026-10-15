@@ -365,7 +365,7 @@ Only return the JSON array. No explanation.`;
     if (!chatResults) return;
     if (!familyId) { setChatError('Please sign in to a family to add an event.'); return; }
     const selected = chatResults.filter(r => r.selected);
-    if (selected.some(r => !r.title?.trim() || !isValidDateKey(r.date) || !r.time || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(r.time))) {
+    if (selected.some(r => !r.title?.trim() || !isValidDateKey(r.date) || !r.time || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time))) {
       setChatError('Confirm a valid title, date, and time for each selected event.');
       return;
     }
@@ -426,7 +426,7 @@ Only return the JSON array. No explanation.`;
     const now = new Date().toISOString();
 
     if (!familyId) { setEventFormError('Please sign in to your family to create events.'); return; }
-    if (!isValidDateKey(date) || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(startTime) || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(endTime)) {
+    if (!isValidDateKey(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime)) {
       setEventFormError('Provide a valid date and start/end times.');
       return;
     }
@@ -809,12 +809,13 @@ Only return the JSON array. No explanation.`;
                   </div>
                   <div className="space-y-2">
                     {chatResults.map((result, i) => (
-                      <label
+                      <div
                         key={i}
-                        className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${result.selected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200'}`}
+                        className={`flex items-start gap-3 p-3 rounded-xl border transition-colors ${result.selected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200'}`}
                       >
                         <input
                           type="checkbox"
+                          aria-label={`Select ${result.title || 'untitled extracted event'} for calendar addition`}
                           checked={result.selected}
                           onChange={() => setChatResults(prev => prev!.map((r, j) => j === i ? { ...r, selected: !r.selected } : r))}
                           className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
@@ -822,12 +823,30 @@ Only return the JSON array. No explanation.`;
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-slate-900 text-sm">{result.title}</p>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            {result.date}
-                            {result.time ? ` · ${result.time}` : ' · Time missing — enter to confirm'}
-                            {result.location && ` · 📍 ${result.location}`}
+                            {result.location || 'No location supplied'} · Review date and time before adding
                           </p>
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            <label className="text-xs text-slate-700 font-semibold">
+                              Date
+                              <input
+                                type="date"
+                                value={result.date || ''}
+                                onChange={e => setChatResults(prev => prev!.map((r, j) => j === i ? { ...r, date: e.target.value } : r))}
+                                className="block border border-slate-200 rounded-lg px-2 py-1 mt-1"
+                              />
+                            </label>
+                            <label className="text-xs text-slate-700 font-semibold">
+                              Time (required)
+                              <input
+                                type="time"
+                                value={result.time || ''}
+                                onChange={e => setChatResults(prev => prev!.map((r, j) => j === i ? { ...r, time: e.target.value } : r))}
+                                className="block border border-slate-200 rounded-lg px-2 py-1 mt-1"
+                              />
+                            </label>
+                          </div>
                         </div>
-                      </label>
+                      </div>
                     ))}
                   </div>
                   <div className="flex gap-3 pt-2">
