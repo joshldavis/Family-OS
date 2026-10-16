@@ -25,9 +25,13 @@ The made-again catalog already has `public.profiles` with `user_id uuid`,
 `display_name`, and `current_household_id uuid`; it lacks Family OS's
 `id text`, `auth_id uuid`, `family_id text`, and `role text` columns. This
 proposal must not be applied to that shared project. Its first transaction
-step now rejects the mismatch before altering policies or grants. A dedicated
-Family OS namespace and server/data-access cutover require separate design
-and isolated verification.
+step now rejects the mismatch before altering policies or grants. The
+authorized catalog audit also found an existing `family_os` schema with
+RLS-enabled `students` and `assignments` tables and security-invoker
+`families` and `profiles` views. The Family OS schema uses UUID household IDs
+from `public.households`; this proposal assumes text family IDs and mutable
+tables in `public`. The replacement cutover must be designed against the
+existing namespace and verified in isolation. No family rows were read.
 
 ## Replacement trust model
 
