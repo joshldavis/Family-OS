@@ -20,7 +20,7 @@ The Parent Decision Inbox and School Agent Lab have useful review UX, but their 
 ## Execution ordering required from an actual backend adapter
 
 1. Verify Supabase Auth via `getUser(token)`, not `getSession` or caller-supplied profile role.
-2. In a single **SERIALIZABLE** database transaction, verify active session (including revocation), lock authenticated parent membership and family proposal.
+2. In a single **SERIALIZABLE** database transaction, verify the **specific bearer session** is still active (not merely that the user has any active session; never log or store the bearer token), lock authenticated parent membership and family proposal.
 3. Lock school source and source-specific consent. Check source origin, source digest, consent active and not revoked. Lock trusted approval receipt.
 4. Recompute source revision from server-held data, confirm student is owned by family, compare exact reviewed title/student/deadline with approved receipt, ensure reviewer is same authenticated parent for v1.
 5. Atomically `INSERT` a unique claim. On successful new claim, insert assignment with explicit `family_id` + `student_id` and write action receipt. Commit together; no partial claim or partial task.
