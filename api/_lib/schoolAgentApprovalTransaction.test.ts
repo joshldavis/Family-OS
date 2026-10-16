@@ -74,7 +74,8 @@ class FakeSerializedDatabase {
         const receipts = [...this.receipts];
         const claims = new Map(this.claimKeys);
         const tx: SchoolAgentExecutionTx = {
-          activeSession: async () => this.sessionActive,
+          activeSession: async (authId, bearerHeader) =>
+            this.sessionActive && authId === actorAuthUserId && bearerHeader === token,
           lockMembership: async () => { this.reads.membership++; return this.membership; },
           lockProposal: async () => { this.reads.proposal++; return this.currentProposal; },
           lockSourceAndConsent: async () => this.source,
@@ -168,6 +169,16 @@ test('revoked Auth session blocks actions even if JWT identity previously passed
   assert.deepEqual(await submit(db),
     { ok: false, executed: false, reason: 'inactive_session' });
   assert.equal(db.reads.membership, 0);
+});
+
+test('specific session is validated, not merely that another session of same user is active', async () => {
+  const db = new FakeSerializedDatabase();
+  const result = await executeReviewedAssignment(
+    'Bearer other-user-session-12345678', request(), db.adapter(),
+  );
+  assert.deepEqual(result, { ok: false, executed: false, reason: 'inactive_session' });
+  assert.equal(db.reads.membership, 0);
+  assert.equal(db.assignments.length, 0);
 });
 
 test('cross-family source and source digest substitution fail closed', async () => {
