@@ -20,7 +20,7 @@ git show "$sec_ref:supabase/proposals/fos_sec_001_household_lockdown.sql" > "$se
 printf '%s  %s\n' \
   '881d7e52c7e59581a26367938dc949825ae7c53c80a3f432a245e163d31c1d8e' "$int_sql" \
   '73bd868b4cabf7a893cd79479a6731a8309282b8d132ce59f30f842728111105' "$sec_sql" \
-  '358dfcbd5be8dfead269e7f865b0ed4a6fe1572f10523bb8ef12dc0eecaa2174' src/lib/schema.sql \
+  '41c45fc3ddef06d3a2a42a6f4912c633c9591fcb0cb48cffb7dbaba71de7840b' src/lib/schema.sql \
   | sha256sum --check --status
 
 psql -X -v ON_ERROR_STOP=1 -f tests/database/fos005_dependency_bootstrap.sql

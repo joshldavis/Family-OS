@@ -37,7 +37,8 @@ Realtime, grants, and actual migration behavior before deployment.
 As of 2026-10-16, the two connected Supabase accounts list **Travel Connects
 Lead**, **MainStreetDiligence** and **made-again**. The owner confirmed that
 made-again is intentionally used for Family OS to avoid another paid project.
-It is a shared project, so no SQL or read query from this PR is sent there.
+It is a shared project; only the owner-authorized catalog reads documented
+below were sent there. No migration or user-row query was run.
 The specific Vercel server-side URL remains unverifiable because it is a
 write-only Secret.
 The Vercel `family-os` environment metadata shows `SUPABASE_URL` and
@@ -100,13 +101,30 @@ current made-again schema.
 
 PR #2 already contains `supabase/audits/family_os_readonly_baseline.sql`, a
 catalog-only inventory of relations, columns, policies, foreign keys,
-privileged functions and grants. It has not been run on made-again here because
-this task prohibits touching a production or unrelated database. A project
-owner can provide a reviewed schema-only export, or authorize a later
-read-only catalog audit. If names or policies overlap, design a dedicated
-Family OS namespace and server gateway before any migration; do not run the
-current proposals to see what happens. Preview and Production currently share
-one Vercel service-role Secret entry, so Preview is not a safe rehearsal target.
+privileged functions and grants. Preview and Production currently share one
+Vercel service-role Secret entry, so Preview is not a safe rehearsal target.
+
+### Catalog-only finding on made-again (authorized 2026-10-16)
+
+The owner explicitly allowed a catalog-only audit. It read `pg_catalog` and
+`information_schema` metadata for relation names, `public.profiles` columns,
+policies and grants; it did not read family rows, credentials, or write SQL.
+The shared project has `public.profiles` but no `public.families`,
+`public.students` or `public.assignments`. Its `profiles` columns are
+`user_id uuid`, `display_name text`, `current_household_id uuid`, and
+`created_at timestamptz`. It has a `profiles_all` RLS policy based on
+`user_id = auth.uid()`. Family OS expects `id text`, `auth_id uuid`,
+`family_id text` and `role text`; these are different data models.
+
+This is a **confirmed collision**. Applying the legacy `src/lib/schema.sql`
+to made-again would be unsafe because `CREATE TABLE IF NOT EXISTS` could reuse
+the existing `public.profiles`. The staged PR #5 security SQL also targets
+`public.profiles`, including revoking browser mutation privileges and indexing
+`auth_id`. It must not be applied to made-again. The legacy schema now starts
+with an atomic preflight that rejects this signature before creating tables;
+a synthetic made-again signature is tested in disposable CI. The broader
+cutover needs a separate Family OS namespace and server/data-access design,
+or another reviewed isolation strategy, before any shared-project migration.
 
 ## Remaining release gates
 

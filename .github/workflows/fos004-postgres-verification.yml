@@ -56,3 +56,9 @@ jobs:
           set -euo pipefail
           createdb fos_dependency_rehearsal
           PGDATABASE=fos_dependency_rehearsal bash tests/database/fos005_dependency_rehearsal.sh
+      - name: Reject the confirmed shared-project profile collision
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb fos_shared_collision
+          PGDATABASE=fos_shared_collision bash tests/database/fos005_shared_collision.sh
