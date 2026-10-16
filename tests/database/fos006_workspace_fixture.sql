@@ -1,6 +1,12 @@
 -- Synthetic stand-in for the catalog-confirmed made-again / family_os shape.
-create role anon nologin;
-create role authenticated nologin;
+do $$ begin
+  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'anon') then
+    create role anon nologin;
+  end if;
+  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+end $$;
 create schema auth;
 create table auth.users (id uuid primary key);
 create table public.households (id uuid primary key);
