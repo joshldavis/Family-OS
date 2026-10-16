@@ -1,0 +1,50 @@
+name: FOS-004 Disposable PostgreSQL Verification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/fos004-postgres-verification.yml'
+      - 'supabase/proposals/fos_004_school_agent_approval_ledger.sql'
+      - 'supabase/audits/fos_004_approval_ledger_verify.sql'
+      - 'tests/database/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: disposable-ci-only
+          POSTGRES_DB: fos004_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fos004_disposable"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: disposable-ci-only
+      PGDATABASE: fos004_disposable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Verify disposable target and run synthetic database checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = fos004_disposable
+          test -z "${DATABASE_URL:-}"
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/fos004_fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_004_school_agent_approval_ledger.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/audits/fos_004_approval_ledger_verify.sql
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/fos004_verify.sql
