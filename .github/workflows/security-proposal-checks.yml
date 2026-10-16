@@ -1,0 +1,32 @@
+name: FOS-SEC-001 security proposal checks
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/proposals/**'
+      - 'docs/SECURITY-CUTOVER-PLAN.md'
+      - 'tests/security/**'
+      - 'src/security/**'
+      - 'api/_lib/verifiedIdentity*'
+      - 'api/_lib/invitations*'
+      - 'src/pages/Auth.tsx'
+      - '.github/workflows/security-proposal-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review-only-security-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: node --test tests/security/securityCutover.test.mjs
+      - run: node --experimental-strip-types --test src/security/authorization.test.ts api/_lib/verifiedIdentity.test.ts api/_lib/invitations.test.ts
