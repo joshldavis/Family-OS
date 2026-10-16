@@ -21,7 +21,9 @@ begin
     where n.nspname='family_os' and c.relname in
       ('family_sources','family_action_proposals','school_agent_source_consents',
        'school_agent_review_receipts','school_agent_action_claims')
-      and (not c.relrowsecurity or has_table_privilege('authenticated',c.oid,'SELECT')
+      and (not c.relrowsecurity or not has_table_privilege('service_role',c.oid,'SELECT')
+        or not has_table_privilege('service_role',c.oid,'INSERT')
+        or has_table_privilege('authenticated',c.oid,'SELECT')
         or has_table_privilege('authenticated',c.oid,'INSERT')
         or has_table_privilege('anon',c.oid,'SELECT'))
   ) then raise exception 'FOS-006 browser access is open'; end if;

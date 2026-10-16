@@ -153,8 +153,9 @@ with this live workspace.
 The separate `fos_006_shared_workspace_school_ledger.sql` review proposal now
 models the School Agent's minimal source, proposal, consent, review and claim
 tables under `family_os` with UUID household IDs. It starts with a fail-closed
-schema preflight, creates no execution route or client policy, and revokes API
-role grants on every new table. A new disposable CI database simulates the
+schema preflight, creates no execution route or client policy, and revokes
+browser-role grants while granting the server-only service role on new tables.
+A new disposable CI database simulates the
 observed shared `public.profiles` shape and `family_os` students/assignments,
 then checks tenant-bound references, incomplete approvals, duplicate claims,
 RLS and grants. This is a **contract rehearsal**, not an executable migration:

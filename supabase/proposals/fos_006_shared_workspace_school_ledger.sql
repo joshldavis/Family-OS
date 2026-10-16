@@ -171,5 +171,9 @@ alter table family_os.school_agent_action_claims enable row level security;
 revoke all on family_os.family_sources, family_os.family_action_proposals,
   family_os.school_agent_source_consents, family_os.school_agent_review_receipts,
   family_os.school_agent_action_claims from public, anon, authenticated;
+grant select, insert, update, delete on family_os.family_sources,
+  family_os.family_action_proposals, family_os.school_agent_source_consents,
+  family_os.school_agent_review_receipts, family_os.school_agent_action_claims
+  to service_role;
 
 commit;
