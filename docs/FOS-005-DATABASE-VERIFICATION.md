@@ -120,9 +120,10 @@ This is a **confirmed collision**. Applying the legacy `src/lib/schema.sql`
 to made-again would be unsafe because `CREATE TABLE IF NOT EXISTS` could reuse
 the existing `public.profiles`. The staged PR #5 security SQL also targets
 `public.profiles`, including revoking browser mutation privileges and indexing
-`auth_id`. It must not be applied to made-again. The legacy schema now starts
-with an atomic preflight that rejects this signature before creating tables;
-a synthetic made-again signature is tested in disposable CI. The broader
+`auth_id`. It must not be applied to made-again. The legacy schema and the
+separate draft PR #5 proposal now each start with an atomic preflight. A
+synthetic made-again signature is tested in disposable CI against both; its
+existing RLS policy and client grants remain intact after rejection. The broader
 cutover needs a separate Family OS namespace and server/data-access design,
 or another reviewed isolation strategy, before any shared-project migration.
 
