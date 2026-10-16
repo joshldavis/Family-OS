@@ -27,25 +27,51 @@ against a verified, disposable Supabase clone before deployment. The checked-in
 
 As of 2026-10-16, the two connected Supabase accounts list only **Travel
 Connects Lead**, **MainStreetDiligence** and **made-again**. None is identified
-as Family OS. A project name alone is insufficient proof of ownership.
+as Family OS. The local URL matches made-again, but a project name or local
+setting alone is insufficient proof that it is the intended Family OS database.
 The Vercel `family-os` environment metadata shows `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY` assigned to both Preview and Production, but the
-URL value is unavailable through the metadata view. Do not assume those
-environments use different databases; confirm before enabling server writes.
+URL value is unavailable through the metadata view. The Vercel dashboard
+describes saved Secret values as write-only, so opening the setting cannot
+reveal the ref. Both environments share the same variable entry; do not
+assume Preview is isolated from Production before enabling server writes.
 
-1. In the Vercel **family-os** project's environment settings, ask an owner to
-   inspect the *hostname/ref only* in `SUPABASE_URL` for each Production and
-   Preview environment. Do not copy or share service-role, secret, anon or
-   database credentials. The ref is the subdomain before `.supabase.co`.
-2. In the Supabase Dashboard, locate the project whose Project URL has that
-   same ref, and record its display name, organization and whether it is a
-   dedicated test or production project. Confirm that the deploy environment
-   being inspected actually uses that Vercel setting.
+### Configuration findings (2026-10-16)
+
+- The latest READY Production deployment inspected was built from `main` at
+  `8125407e0913cd5bd319306390efe5cd24073528`. Its public browser bundle
+  contains the app's `https://placeholder.supabase.co` fallback and no
+  configured Supabase project URL. This matches the Vercel project environment
+  listing, which has no `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY`. The
+  production browser is therefore in the repository's offline/localStorage
+  mode; server-only variables do not configure the browser build.
+- An ignored `.env.local` in the older local `Family-OS` checkout sets
+  `VITE_SUPABASE_URL` to the project **made-again**, one of the connected
+  Supabase projects. This file was not changed. Its value does not establish
+  that made-again is the intended Family OS database, or what the Vercel
+  server-side `SUPABASE_URL` points to.
+- Vercel's server-side `SUPABASE_URL` is a write-only Secret. Its value was
+  unavailable in both the connected metadata tool and the dashboard edit view.
+  No service-role key or other credential was inspected.
+
+Before any cloud cutover, have the project owner identify the intended Family
+OS project in the Supabase Dashboard and decide whether use of made-again in
+the local checkout is intentional. Configure browser variables for an isolated
+Preview environment only after PR #5's security cutover and the schema/role
+checks pass. Do not copy Production service-role credentials into Preview.
+
+1. In the Supabase Dashboard, locate the project intended for Family OS.
+   Record only its project ref (the subdomain before `.supabase.co`), display
+   name, organization, and whether it is a test or production project. Confirm
+   explicitly whether the locally configured made-again project is intentional.
+2. If an owner has the original Vercel `SUPABASE_URL` value in a trusted
+   configuration record, compare only its ref with that dashboard project.
+   The saved Vercel Secret cannot be revealed through the current dashboard
+   or connector. Do not share a service-role, secret, anon or database key.
 3. Connect the owning Supabase organization/account to Codex, or provide just
-   the project ref and the matching environment label. Before any DB query,
-   independently compare those nonsecret identifiers with the repository's
-   deployment configuration. Do not infer identity from the three unrelated
-   connected projects.
+   the intended project ref and environment label. Before any DB query,
+   reconcile that identity with the deployment plan; do not infer identity
+   solely from the local made-again setting.
 4. For schema reconciliation, create a **separate disposable project or local
    clone** with synthetic data. Review #5 and #2 dependency SQL, backups,
    migrations and access policies there first. Never run the FOS-004 proposal
