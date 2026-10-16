@@ -1,5 +1,5 @@
 # Family OS — Product & Engineering Roadmap
-Updated: 2026-10-13. Source of truth for modes: [Operating Modes & Learning Support Architecture](docs/LEARNING-SUPPORT-MODE-SPEC.md).
+Updated: 2026-10-13. **For current draft/preview/production status, decisions, dependencies and archive handoff, see [Canonical Family OS handoff](docs/FAMILY-OS-CANONICAL-HANDOFF.md) (audited 2026-10-16).** The queue below is the original product plan and its unchecked boxes do not reflect draft PR progress. Source of truth for modes: [Operating Modes & Learning Support Architecture](docs/LEARNING-SUPPORT-MODE-SPEC.md).
 
 ## Product direction
 **One Family OS, configurable operating modes.** Preserve the current general-family app; introduce a focused Learning Support experience for school/therapy/learning-support households. Build data provenance and controlled agentic execution to reduce parental coordination burden. Do not fork the app or delete disabled module data.
