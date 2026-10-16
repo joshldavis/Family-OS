@@ -2,6 +2,30 @@
 -- Family OS — Supabase Schema (Phase 3A)
 -- Run this in the Supabase Dashboard → SQL Editor
 -- ============================================================
+-- Shared-project safety: this legacy schema owns public.profiles. Another
+-- application's table with that name must never be reused by IF NOT EXISTS.
+-- Keep all DDL atomic so a failed preflight leaves no partial Family OS schema.
+begin;
+
+do $family_os_preflight$
+declare
+  profile_table oid := to_regclass('public.profiles');
+  required_columns integer;
+begin
+  if profile_table is not null then
+    select count(*) into required_columns
+    from pg_catalog.pg_attribute a
+    where a.attrelid = profile_table and a.attnum > 0 and not a.attisdropped
+      and ((a.attname = 'id' and a.atttypid = 'text'::regtype)
+        or (a.attname = 'auth_id' and a.atttypid = 'uuid'::regtype)
+        or (a.attname = 'family_id' and a.atttypid = 'text'::regtype)
+        or (a.attname = 'role' and a.atttypid = 'text'::regtype));
+    if to_regclass('public.families') is null or required_columns <> 4 then
+      raise exception 'Family OS preflight: incompatible public.profiles; shared-project schema collision';
+    end if;
+  end if;
+end
+$family_os_preflight$;
 
 -- ── Extensions ───────────────────────────────────────────────
 create extension if not exists "uuid-ossp";
@@ -228,3 +252,5 @@ alter publication supabase_realtime add table transactions;
 alter publication supabase_realtime add table budgets;
 alter publication supabase_realtime add table savings_goals;
 alter publication supabase_realtime add table daily_agendas;
+
+commit;
