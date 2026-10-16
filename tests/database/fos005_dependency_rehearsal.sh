@@ -6,7 +6,7 @@ test "${PGDATABASE:-}" = fos_dependency_rehearsal
 test -z "${DATABASE_URL:-}"
 
 int_ref=bb8450eb7162eedec606de453d2503c38e3f69aa
-sec_ref=026ec8f5b8aa16425c117ab91a59a2479a9689f5
+sec_ref=4ce1fc536105cbdca2fb6b406c7ffc80268d4a63
 git fetch --depth=1 origin \
   '+refs/heads/architecture/family-intelligence-foundation-20261013:refs/remotes/origin/architecture/family-intelligence-foundation-20261013' \
   '+refs/heads/security/fos-sec-001-household-boundaries:refs/remotes/origin/security/fos-sec-001-household-boundaries'
