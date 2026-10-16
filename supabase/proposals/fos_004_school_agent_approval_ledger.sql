@@ -22,6 +22,14 @@ begin;
 
 create extension if not exists pgcrypto;
 
+-- Tenant-bound composite FKs below need uniqueness on the source tables.
+-- Both legacy tables have globally unique IDs, but these indexes make the
+-- household join a database-enforced condition, not only app validation.
+create unique index if not exists students_family_id_id_uidx
+  on public.students(family_id, id);
+create unique index if not exists family_proposals_family_id_source_uidx
+  on public.family_action_proposals(family_id, id, source_id);
+
 -- Per-source consent, not a broad claim that a school email is authentic.
 -- Revoking consent must block future execution, including during retries.
 create table if not exists public.school_agent_source_consents (
@@ -69,12 +77,16 @@ create table if not exists public.school_agent_review_receipts (
   confirmed_due_date    date,
   reviewed_at           timestamptz not null default now(),
   unique (family_id, id),
-  constraint school_review_proposal_same_family
-    foreign key (family_id, proposal_id)
-    references public.family_action_proposals(family_id, id) on delete cascade,
+  unique (family_id, id, proposal_id, source_id),
+  constraint school_review_proposal_source_same_family
+    foreign key (family_id, proposal_id, source_id)
+    references public.family_action_proposals(family_id, id, source_id) on delete cascade,
   constraint school_review_source_same_family
     foreign key (family_id, source_id)
     references public.family_sources(family_id, id) on delete cascade,
+  constraint school_review_student_same_family
+    foreign key (family_id, confirmed_student_id)
+    references public.students(family_id, id) on delete restrict,
   constraint school_review_valid_title
     check (confirmed_title is null or
       (length(confirmed_title) between 1 and 200 and
@@ -117,9 +129,9 @@ create table if not exists public.school_agent_action_claims (
   constraint school_claim_proposal_same_family
     foreign key (family_id, proposal_id)
     references public.family_action_proposals(family_id, id) on delete cascade,
-  constraint school_claim_receipt_same_family
-    foreign key (family_id, approved_receipt_id)
-    references public.school_agent_review_receipts(family_id, id),
+  constraint school_claim_receipt_same_proposal_source_family
+    foreign key (family_id, approved_receipt_id, proposal_id, source_id)
+    references public.school_agent_review_receipts(family_id, id, proposal_id, source_id),
   constraint school_claim_executed_complete
     check (status <> 'executed' or
       (assignment_id is not null and executed_by_auth_id is not null
@@ -129,6 +141,10 @@ create table if not exists public.school_agent_action_claims (
 create index if not exists school_claim_family_status_idx
   on public.school_agent_action_claims(family_id, status, created_at desc);
 
+-- Approved review rows use ON DELETE RESTRICT for student references so
+-- deletion cannot silently orphan a claimed action. Real erasure must have
+-- a privileged, reviewed workflow for revocation and dependent receipts.
+--
 -- Optional assignment-id reference requires a reviewed composite unique
 -- constraint on legacy assignments(family_id,id). This proposal does NOT
 -- alter the existing assignments table or make such assumptions silently.
