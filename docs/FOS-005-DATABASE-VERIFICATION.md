@@ -124,13 +124,36 @@ the existing `public.profiles`. The staged PR #5 security SQL also targets
 separate draft PR #5 proposal now each start with an atomic preflight. A
 synthetic made-again signature is tested in disposable CI against both; its
 existing RLS policy and client grants remain intact after rejection. The broader
-cutover needs a separate Family OS namespace and server/data-access design,
-or another reviewed isolation strategy, before any shared-project migration.
+cutover must use the existing `family_os` namespace and a reviewed server/data-access
+design before any shared-project migration.
+
+### Existing Family OS workspace (catalog-only finding, 2026-10-16)
+
+The same authorized catalog audit found an existing `family_os` schema in
+made-again. It contains RLS-enabled tables including `students`, `assignments`,
+`child_profiles`, `chores`, `events`, and budgets, plus `families` and `profiles`
+views. The views use `security_invoker=true` and expose the verified active
+household; their source tables are `public.households` and
+`public.household_members`. Catalog metadata confirms `family_os.families.id`
+and the `family_id` columns of `profiles`, `students`, and `assignments` are
+`uuid`. Its `profiles` view is read-only to authenticated clients. No family
+rows were queried. The local, currently untracked
+`supabase/migrations/20261013170515_family_os_workspace.sql` in the older
+checkout describes this layout, but is not a reviewed or pinned PR dependency.
+
+This explains why the owner recalled setting up Family OS in made-again.
+It also changes the next step: adapt PR #2's source/proposal tables and PR #16's
+approval ledger to the existing `family_os` schema, UUID household IDs, and
+current RLS model in an isolated fixture. Their current `public`/text-ID SQL
+cannot be applied to made-again. Review the existing workspace migration and
+its prerequisite membership hardening before treating either as a release
+baseline. The disposable CI rehearsal currently exercises the legacy branch;
+it does not validate compatibility with this live workspace.
 
 ## Remaining release gates
 
-- Confirm the actual families/students/assignments and PR #2 source/proposal
-  schemas and grants before preparing a real migration.
+- Reconcile the existing `family_os` workspace and its membership functions
+  with PR #2 source/proposal tables and PR #16 ledger in a disposable database.
 - Implement a server-only adapter for the PR #16 contract with exact bearer
   session validation, parent membership, consistent row locks and a single
   SERIALIZABLE transaction. There is currently no execution route.
