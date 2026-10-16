@@ -7,6 +7,7 @@ on:
       - 'supabase/proposals/fos_004_school_agent_approval_ledger.sql'
       - 'supabase/audits/fos_004_approval_ledger_verify.sql'
       - 'tests/database/**'
+      - 'src/lib/schema.sql'
   workflow_dispatch:
 
 permissions:
@@ -49,3 +50,9 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/audits/fos_004_approval_ledger_verify.sql
           psql -X -v ON_ERROR_STOP=1 -f tests/database/fos004_verify.sql
           bash tests/database/fos004_integration.sh
+      - name: Rehearse pinned dependency SQL in a second disposable database
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb fos_dependency_rehearsal
+          PGDATABASE=fos_dependency_rehearsal bash tests/database/fos005_dependency_rehearsal.sh
