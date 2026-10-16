@@ -18,6 +18,30 @@
 
 begin;
 
+-- The cost-saving shared Supabase project already has an unrelated
+-- public.profiles table. Refuse to alter any policy or grant unless the
+-- legacy Family OS families/profiles schema is present and compatible.
+do $family_os_preflight$
+declare
+  profile_table oid := to_regclass('public.profiles');
+  required_columns integer;
+begin
+  if to_regclass('public.families') is null or profile_table is null then
+    raise exception 'FOS-SEC-001 preflight: Family OS families/profiles schema missing';
+  end if;
+  select count(*) into required_columns
+  from pg_catalog.pg_attribute a
+  where a.attrelid = profile_table and a.attnum > 0 and not a.attisdropped
+    and ((a.attname = 'id' and a.atttypid = 'text'::regtype)
+      or (a.attname = 'auth_id' and a.atttypid = 'uuid'::regtype)
+      or (a.attname = 'family_id' and a.atttypid = 'text'::regtype)
+      or (a.attname = 'role' and a.atttypid = 'text'::regtype));
+  if required_columns <> 4 then
+    raise exception 'FOS-SEC-001 preflight: incompatible public.profiles; shared-project collision';
+  end if;
+end
+$family_os_preflight$;
+
 alter table public.families enable row level security;
 alter table public.profiles enable row level security;
 

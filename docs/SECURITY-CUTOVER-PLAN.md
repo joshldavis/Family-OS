@@ -1,6 +1,6 @@
 # FOS-SEC-001 — Secure household membership cutover
 
-**Status:** draft proposal, not deployed. **Target database:** not yet verified. **Owner project:** Family OS. Date: 2026-10-13.
+**Status:** draft proposal, not deployed. **Target database:** shared made-again project, incompatible with current `public.profiles` design. **Owner project:** Family OS. Updated: 2026-10-16.
 
 ## Why this is the gating item
 
@@ -16,8 +16,18 @@ The same checked-in tenant lookup is a public-schema `SECURITY DEFINER` function
 - Vercel reports `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` configured for production/preview; values were not retrieved.
 - **Preview/production credential isolation:** the same Vercel environment-variable entries are targeted to both `preview` and `production`. Before merging agent/backend features, verify preview deployments cannot use a production database service-role key; configure separate non-production Supabase credentials for preview, restrict deployment trust, and rotate credentials if their exposure is suspected. No secret values were inspected.
 - The visible Vercel environment list does **not** include `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` used by `src/lib/supabase.ts`. A built bundle may use different configuration or localStorage/offline fallback. Verify deployed browser behavior before drawing conclusions.
-- Available connected Supabase projects were MainStreetDiligence, made-again, and Travel Connects Lead. None was identifiable as Family OS, so the deployed Family OS database has **not** been inspected.
+- The owner confirmed made-again is intentionally shared with Family OS to avoid a second paid project. Only an authorized catalog-only audit was run; no family rows or credentials were read.
 - No production data migration or permission change has been made.
+
+### Confirmed shared-project collision
+
+The made-again catalog already has `public.profiles` with `user_id uuid`,
+`display_name`, and `current_household_id uuid`; it lacks Family OS's
+`id text`, `auth_id uuid`, `family_id text`, and `role text` columns. This
+proposal must not be applied to that shared project. Its first transaction
+step now rejects the mismatch before altering policies or grants. A dedicated
+Family OS namespace and server/data-access cutover require separate design
+and isolated verification.
 
 ## Replacement trust model
 

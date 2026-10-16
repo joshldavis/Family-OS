@@ -16,6 +16,18 @@ test('FOS-SEC-001 proposal removes permissive enrollment and broad update polici
   assert.match(proposal, /revoke insert, update, delete on table public\.profiles\s+from public, anon, authenticated/i);
 });
 
+test('proposal fails before DDL on a shared-project profiles collision', () => {
+  const guard = proposal.indexOf('do $family_os_preflight$');
+  const firstAlter = proposal.indexOf('alter table public.families');
+  assert.ok(guard > proposal.indexOf('begin;') && guard < firstAlter);
+  assert.match(proposal, /to_regclass\('public\.families'\)/);
+  assert.match(proposal, /to_regclass\('public\.profiles'\)/);
+  for (const column of ['id', 'auth_id', 'family_id', 'role']) {
+    assert.match(proposal, new RegExp("a\\.attname = '" + column + "'"));
+  }
+  assert.match(proposal, /incompatible public\.profiles; shared-project collision/);
+});
+
 test('security proposal cannot be inadvertently included in migrations', () => {
   const dir = new URL('../../supabase/migrations/', import.meta.url);
   const migrations = existsSync(dir) ? readdirSync(dir) : [];
