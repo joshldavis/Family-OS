@@ -147,8 +147,21 @@ approval ledger to the existing `family_os` schema, UUID household IDs, and
 current RLS model in an isolated fixture. Their current `public`/text-ID SQL
 cannot be applied to made-again. Review the existing workspace migration and
 its prerequisite membership hardening before treating either as a release
-baseline. The disposable CI rehearsal currently exercises the legacy branch;
-it does not validate compatibility with this live workspace.
+baseline. The legacy dependency rehearsal does not validate compatibility
+with this live workspace.
+
+The separate `fos_006_shared_workspace_school_ledger.sql` review proposal now
+models the School Agent's minimal source, proposal, consent, review and claim
+tables under `family_os` with UUID household IDs. It starts with a fail-closed
+schema preflight, creates no execution route or client policy, and revokes API
+role grants on every new table. A new disposable CI database simulates the
+observed shared `public.profiles` shape and `family_os` students/assignments,
+then checks tenant-bound references, incomplete approvals, duplicate claims,
+RLS and grants. This is a **contract rehearsal**, not an executable migration:
+the fixture does not reproduce all live Auth, membership functions, triggers,
+Data API configuration or Supabase behavior. The full PR #2 intelligence
+schema still needs adaptation and review; only its source/proposal subset is
+represented here. No migration has been run against made-again.
 
 ## Remaining release gates
 

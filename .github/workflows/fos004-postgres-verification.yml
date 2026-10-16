@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/fos004-postgres-verification.yml'
       - 'supabase/proposals/fos_004_school_agent_approval_ledger.sql'
+      - 'supabase/proposals/fos_006_shared_workspace_school_ledger.sql'
       - 'supabase/audits/fos_004_approval_ledger_verify.sql'
       - 'tests/database/**'
       - 'src/lib/schema.sql'
@@ -62,3 +63,18 @@ jobs:
           set -euo pipefail
           createdb fos_shared_collision
           PGDATABASE=fos_shared_collision bash tests/database/fos005_shared_collision.sh
+      - name: Rehearse the existing UUID Family OS workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb fos_uuid_workspace
+          test "$PGHOST" = localhost
+          test -z "${DATABASE_URL:-}"
+          PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f tests/database/fos006_workspace_fixture.sql
+          PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql
+          PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f tests/database/fos006_workspace_verify.sql
+          if psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql >/dev/null 2>&1; then
+            echo 'UUID workspace proposal accepted the incompatible legacy fixture' >&2
+            exit 1
+          fi
+          psql -X -v ON_ERROR_STOP=1 -Atc "select to_regclass('family_os.family_sources') is null" | grep -qx t
