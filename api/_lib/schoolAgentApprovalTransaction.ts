@@ -56,7 +56,13 @@ export interface SchoolAgentExecutionTx {
    * implementation MUST preserve consistent locking order and reject revoked
    * sessions even when a previously issued JWT is still technically valid.
    */
-  activeSession(authUserId: string): Promise<boolean>;
+  /**
+   * Validate the EXACT bearer session (not any other session belonging to the
+   * user). Server-only token handling; never log or store authorizationHeader.
+   * The adapter may inspect a verified session_id and compare against a
+   * trusted auth.sessions record or an equivalent provider revocation check.
+   */
+  activeSession(authUserId: string, authorizationHeader: string): Promise<boolean>;
   lockMembership(authUserId: string, familyId: string): Promise<TrustedHouseholdMembership | null>;
   lockProposal(familyId: string, proposalId: string): Promise<TrustedSchoolProposal | null>;
   lockSourceAndConsent(familyId: string, proposalId: string): Promise<TrustedLockedSource | null>;
@@ -163,7 +169,9 @@ export async function executeReviewedAssignment(
   try {
     return await adapters.runSerializable(async tx => {
       const actorAuthUserId = identity.authUserId;
-      if (!await tx.activeSession(actorAuthUserId)) return rejected('inactive_session');
+      if (!await tx.activeSession(actorAuthUserId, authorization ?? '')) {
+        return rejected('inactive_session');
+      }
       const membership = await tx.lockMembership(actorAuthUserId, request.familyId);
       if (!isParentMember(membership, actorAuthUserId, request.familyId)) {
         return rejected('membership_denied');
