@@ -82,10 +82,31 @@ checks pass. Do not copy Production service-role credentials into Preview.
    owner's trusted configuration record or a reviewed credential rotation.
    The current connector cannot reveal the saved URL. Keep Preview isolated
    from any shared production database during testing.
-4. For schema reconciliation, create a **separate disposable project or local
-   clone** with synthetic data. Review #5 and #2 dependency SQL, backups,
-   migrations and access policies there first. Never run the FOS-004 proposal
-   directly on the identified production project.
+4. For schema reconciliation, use a **local or CI disposable database** with
+   synthetic data. Review #5 and #2 dependency SQL, backups, migrations and
+   access policies there first. A new paid Supabase project is not required
+   for these tests. Never run the FOS-004 proposal directly on made-again.
+
+### Shared-project collision gate
+
+The cost-saving arrangement is compatible with local and CI development, but
+the proposed Family OS SQL uses generic names in `public` (`families`,
+`profiles`, `students`, `assignments`). `CREATE TABLE IF NOT EXISTS` is not a
+compatibility check: an existing made-again table with the same name could be
+silently reused. The draft security proposal could also change policies or
+grants on a shared table. Passing the disposable rehearsal above proves the
+draft files coexist with Family OS's checked-in schema, **not** with the
+current made-again schema.
+
+PR #2 already contains `supabase/audits/family_os_readonly_baseline.sql`, a
+catalog-only inventory of relations, columns, policies, foreign keys,
+privileged functions and grants. It has not been run on made-again here because
+this task prohibits touching a production or unrelated database. A project
+owner can provide a reviewed schema-only export, or authorize a later
+read-only catalog audit. If names or policies overlap, design a dedicated
+Family OS namespace and server gateway before any migration; do not run the
+current proposals to see what happens. Preview and Production currently share
+one Vercel service-role Secret entry, so Preview is not a safe rehearsal target.
 
 ## Remaining release gates
 
