@@ -48,3 +48,4 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_004_school_agent_approval_ledger.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/audits/fos_004_approval_ledger_verify.sql
           psql -X -v ON_ERROR_STOP=1 -f tests/database/fos004_verify.sql
+          bash tests/database/fos004_integration.sh

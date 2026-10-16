@@ -7,7 +7,17 @@ create table auth.users (id uuid primary key);
 create table public.families (id text primary key);
 create table public.students (
   id text primary key,
-  family_id text not null references public.families(id)
+  family_id text not null references public.families(id),
+  unique (family_id, id)
+);
+create table public.assignments (
+  id text primary key,
+  family_id text not null references public.families(id),
+  student_id text not null,
+  title text not null,
+  due_date date not null,
+  foreign key (family_id, student_id)
+    references public.students(family_id, id)
 );
 create table public.family_sources (
   id uuid primary key,

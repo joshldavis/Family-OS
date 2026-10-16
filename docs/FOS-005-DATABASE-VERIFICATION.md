@@ -8,11 +8,14 @@ students, sources and an `auth.users` stub, then applies the FOS-004 **proposal*
 to that disposable database. It runs the catalog audit and SQL assertions for
 RLS, client grants, cross-family foreign keys, duplicate action claims and
 incomplete approvals. The assertions run inside a transaction that rolls back.
+It also uses separate PostgreSQL sessions to verify anon/authenticated role
+denial, rollback after an injected write failure, and one claim plus one
+synthetic assignment when two sessions race for the same source.
 
 This verifies PostgreSQL DDL and constraints, which the mock adapter tests in
 PR #16 could not verify. It does **not** prove that the real Family OS schema
 matches these synthetic prerequisites, that a real Supabase Auth session can be
-validated, or that assignment creation is atomic. No remote database, secrets,
+validated, or that the future adapter creates assignments atomically. No remote database, secrets,
 Supabase CLI link, migration history or production deployment is used.
 
 The fixture intentionally covers only the FOS-004 prerequisites. PR #2's
@@ -25,6 +28,10 @@ against a verified, disposable Supabase clone before deployment. The checked-in
 As of 2026-10-16, the two connected Supabase accounts list only **Travel
 Connects Lead**, **MainStreetDiligence** and **made-again**. None is identified
 as Family OS. A project name alone is insufficient proof of ownership.
+The Vercel `family-os` environment metadata shows `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` assigned to both Preview and Production, but the
+URL value is unavailable through the metadata view. Do not assume those
+environments use different databases; confirm before enabling server writes.
 
 1. In the Vercel **family-os** project's environment settings, ask an owner to
    inspect the *hostname/ref only* in `SUPABASE_URL` for each Production and
