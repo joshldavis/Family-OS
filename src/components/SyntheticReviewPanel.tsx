@@ -43,6 +43,9 @@ const SyntheticReviewPanel: React.FC<{
   const isDuplicate = isDuplicateSyntheticSource(candidate, receipts);
 
   const patch = (changes: Partial<SyntheticCorrections>) => {
+    // Any parent correction after a draft approval requires new confirmations.
+    // Never display an old receipt next to a changed proposed action.
+    if (current) onUndoReceipt(current.sourceFingerprint);
     setCorrections(previous => ({ ...previous, ...changes }));
     setError(null);
     setDisposition(null);
@@ -161,7 +164,7 @@ const SyntheticReviewPanel: React.FC<{
           <button type="button" onClick={() => onUndoReceipt(candidate.source.externalRef)}
             className="ml-2 font-semibold underline">Undo earlier draft</button>
         </div>
-      ) : (
+      ) : disposition ? null : (
         <div className="flex gap-2 flex-wrap">
           <button type="button" onClick={approve} disabled={candidate.kind !== 'assignment'}
             className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-sm font-semibold">
