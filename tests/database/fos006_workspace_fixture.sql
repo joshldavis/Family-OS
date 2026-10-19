@@ -55,9 +55,9 @@ create table family_os.assignments (
 );
 alter table family_os.students enable row level security;
 alter table family_os.assignments enable row level security;
-grant select on public.households, public.household_members, public.profiles
+grant select, update on public.households, public.household_members, public.profiles
   to service_role;
-grant select on family_os.students to service_role;
+grant select, update on family_os.students to service_role;
 grant select, insert, update on family_os.assignments to service_role;
 insert into public.households values
   ('00000000-0000-0000-0000-00000000000a'),
