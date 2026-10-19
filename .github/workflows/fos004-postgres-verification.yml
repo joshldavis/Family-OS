@@ -1,0 +1,88 @@
+name: FOS-004 Disposable PostgreSQL Verification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/fos004-postgres-verification.yml'
+      - 'supabase/proposals/fos_004_school_agent_approval_ledger.sql'
+      - 'supabase/proposals/fos_006_shared_workspace_school_ledger.sql'
+      - 'api/_lib/schoolAgentPostgresAdapter.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'supabase/audits/fos_004_approval_ledger_verify.sql'
+      - 'tests/database/**'
+      - 'src/lib/schema.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: disposable-ci-only
+          POSTGRES_DB: fos004_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fos004_disposable"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: disposable-ci-only
+      PGDATABASE: fos004_disposable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install Node dependencies for adapter integration
+        run: npm ci --ignore-scripts
+      - name: Verify disposable target and run synthetic database checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = fos004_disposable
+          test -z "${DATABASE_URL:-}"
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/fos004_fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_004_school_agent_approval_ledger.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/audits/fos_004_approval_ledger_verify.sql
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/fos004_verify.sql
+          bash tests/database/fos004_integration.sh
+      - name: Rehearse pinned dependency SQL in a second disposable database
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb fos_dependency_rehearsal
+          PGDATABASE=fos_dependency_rehearsal bash tests/database/fos005_dependency_rehearsal.sh
+      - name: Reject the confirmed shared-project profile collision
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb fos_shared_collision
+          PGDATABASE=fos_shared_collision bash tests/database/fos005_shared_collision.sh
+      - name: Rehearse the existing UUID Family OS workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb fos_uuid_workspace
+          test "$PGHOST" = localhost
+          test -z "${DATABASE_URL:-}"
+          PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f tests/database/fos006_workspace_fixture.sql
+          PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql
+          PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f tests/database/fos006_workspace_verify.sql
+          PGDATABASE=fos_uuid_workspace node --experimental-strip-types --test tests/database/fos006_adapter.test.ts
+          test "$(PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -Atc "set role service_role; select family_os.school_agent_session_active('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101')" | tail -1)" = t
+          test "$(PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -Atc "set role service_role; select family_os.school_agent_session_active('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000102')" | tail -1)" = f
+          if psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql >/dev/null 2>&1; then
+            echo 'UUID workspace proposal accepted the incompatible legacy fixture' >&2
+            exit 1
+          fi
+          psql -X -v ON_ERROR_STOP=1 -Atc "select to_regclass('family_os.family_sources') is null" | grep -qx t

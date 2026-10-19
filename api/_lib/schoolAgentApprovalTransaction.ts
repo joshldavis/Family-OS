@@ -1,7 +1,7 @@
 /**
  * FOS-004 — trusted approval transaction ORCHESTRATION CONTRACT.
  *
- * No production adapter/HTTP route has been implemented. Invoking this code
+ * No production HTTP route has been implemented. Invoking this code
  * requires explicit transaction adapters, and it never reads client role or
  * accepts a client-supplied title, child, deadline, or approval.
  *
@@ -10,7 +10,7 @@
  * and roll back ALL writes if any step throws. Reject a session revoked after
  * bearer getUser via a fresh DB session check in the trusted adapter.
  *
- * FOS-SEC-001 and a verified real Family OS Supabase project are blockers.
+ * A reviewed Postgres connection and deployment authorization are blockers.
  */
 import { createHash } from 'node:crypto';
 import { verifyBearerIdentity, type SupabaseAuthVerifier } from './verifiedIdentity.ts';
@@ -47,6 +47,7 @@ export interface SchoolAgentActionClaim {
   sourceId: string;
   proposalId: string;
   approvalId: string;
+  sourceRevision: string;
   idempotencyDigest: string;
 }
 
@@ -146,8 +147,8 @@ function isParentMember(
 }
 
 /**
- * Contract runner for future vetted database adapters; NO adapter is currently
- * exported by the app. No frontend button invokes this.
+ * Contract runner for vetted database adapters; no production route or
+ * frontend button invokes this.
  *
  * Parent confirms server-stored immutable approval; executing parent MUST be
  * the same authenticated reviewer in v1. Never trust a browser "Approve" flag.
@@ -230,6 +231,7 @@ export async function executeReviewedAssignment(
         kind: 'create_schoolwork_assignment',
         familyId: request.familyId, sourceId: source.sourceId,
         proposalId: proposal.id, approvalId: review.id,
+        sourceRevision: proposal.revision,
         idempotencyDigest: actionDigest(request.familyId, source.sourceId),
       });
       if (claimed === 'already_executed') return {
