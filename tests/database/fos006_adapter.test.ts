@@ -76,8 +76,8 @@ test('server adapter commits once, denies other families and expired sessions', 
   try {
     const request = await seed(1, 'Library worksheet');
     const first = await executeReviewedAssignment(activeBearer, request, adapters);
-    assert.equal(first.ok, true);
-    assert.equal(first.executed, true);
+    assert.equal(first.ok, true, JSON.stringify(first));
+    assert.equal(first.executed, true, JSON.stringify(first));
     const second = await executeReviewedAssignment(activeBearer, request, adapters);
     assert.deepEqual(second, { ok: true, executed: false,
       reason: 'already_executed', familyId });
