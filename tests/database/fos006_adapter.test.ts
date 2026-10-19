@@ -120,7 +120,8 @@ test('server adapter commits once, denies other families and expired sessions', 
     const results = await Promise.all(Array.from({ length: 5 },
       () => executeReviewedAssignment(activeBearer, parallel, adapters)));
     assert.equal(results.filter(result => result.executed).length, 1);
-    assert.equal(results.filter(result => result.ok && !result.executed).length, 4);
+    assert.equal(results.filter(result => result.ok && !result.executed).length, 4,
+      JSON.stringify({ results, sqlStates }));
     const parallelCounts = await admin.query(`
       select (select count(*)::int from family_os.assignments where title='Parallel assignment') as assignments,
         (select count(*)::int from family_os.school_agent_action_claims where source_id=$1) as claims,
