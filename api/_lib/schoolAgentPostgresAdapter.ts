@@ -70,7 +70,8 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
           p.status, p.consent_captured_at,
           p.title_confirmed_by_parent, p.student_confirmed_by_parent,
           p.date_confirmed_by_parent, s.source_system,
-          c.status as consent_status
+          c.status as consent_status,
+          p.consent_grant_version, c.grant_version
         from family_os.family_action_proposals p
         join family_os.family_sources s
           on s.family_id = p.family_id and s.id = p.source_id
@@ -90,7 +91,8 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
         reviewStatus: row.status === 'approved' || row.status === 'executed' ?
           'ready_for_review' : 'needs_correction',
         consentCapturedAt: iso(row.consent_captured_at),
-        consentStatus: row.consent_status === 'active' ? 'active' :
+        consentStatus: row.consent_status === 'active' &&
+          row.consent_grant_version === row.grant_version ? 'active' :
           row.consent_status === 'revoked' ? 'revoked' : 'pending',
         titleConfirmedByParent: row.title_confirmed_by_parent === true,
         studentConfirmedByParent: row.student_confirmed_by_parent === true,
@@ -101,7 +103,8 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
     lockSourceAndConsent: async (familyId, proposalId): Promise<TrustedLockedSource | null> => {
       const row = first(await client.query(`
         select s.family_id::text, s.id::text as source_id, s.source_ref_digest,
-          c.status, c.granted_at
+          c.status, c.granted_at,
+          p.consent_grant_version, c.grant_version
         from family_os.family_action_proposals p
         join family_os.family_sources s
           on s.family_id = p.family_id and s.id = p.source_id
@@ -112,7 +115,8 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
       return row ? {
         familyId: String(row.family_id), sourceId: String(row.source_id),
         sourceRefDigest: String(row.source_ref_digest),
-        consentStatus: row.status === 'active' ? 'active' :
+        consentStatus: row.status === 'active' &&
+          row.consent_grant_version === row.grant_version ? 'active' :
           row.status === 'revoked' ? 'revoked' : 'pending',
         consentGrantedAt: iso(row.granted_at),
       } : null;
@@ -123,8 +127,7 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
           source_revision, decision, reviewed_by_auth_id::text,
           confirmed_title, confirmed_student_id, confirmed_due_date::text
         from family_os.school_agent_review_receipts
-        where family_id = $1::uuid and id = $2::uuid
-        for share`, [familyId, receiptId]));
+        where family_id = $1::uuid and id = $2::uuid`, [familyId, receiptId]));
       return row ? {
         id: String(row.id), familyId: String(row.family_id),
         proposalId: String(row.proposal_id), sourceId: String(row.source_id),
@@ -145,13 +148,16 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
     claimUniqueAction: async (claim: SchoolAgentActionClaim) => {
       const inserted = first(await client.query(`
         insert into family_os.school_agent_action_claims
-          (family_id,source_id,proposal_id,approved_receipt_id,action_kind,idempotency_digest)
-        select $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6
+          (family_id,source_id,proposal_id,approved_receipt_id,action_kind,
+           source_revision,idempotency_digest)
+        select $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7
         from family_os.family_action_proposals p
         where p.family_id=$1::uuid and p.id=$3::uuid and p.status='approved'
+          and p.source_revision=$6
         on conflict (family_id,source_id,action_kind) do nothing
         returning id::text`, [claim.familyId, claim.sourceId, claim.proposalId,
-          claim.approvalId, claim.kind, claim.idempotencyDigest]));
+          claim.approvalId, claim.kind, claim.sourceRevision,
+          claim.idempotencyDigest]));
       if (inserted) { claimedId = String(inserted.id); return 'claimed'; }
       const existing = first(await client.query(`
         select c.status, r.id as receipt_id
@@ -183,9 +189,10 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
           executed_by_auth_id=$2::uuid, executed_at=now()
         where id=$3::uuid and family_id=$4::uuid and source_id=$5::uuid
           and proposal_id=$6::uuid and approved_receipt_id=$7::uuid
-          and status='claimed'
+          and source_revision=$8 and status='claimed'
         returning id`, [fields.assignmentId, fields.actorAuthUserId, claimedId,
-          fields.familyId, fields.sourceId, fields.proposalId, fields.approvalId]));
+          fields.familyId, fields.sourceId, fields.proposalId, fields.approvalId,
+          fields.sourceRevision]));
       if (!claim) throw new Error('Claim finalization failed');
       const receipt = first(await client.query(`
         insert into family_os.school_agent_execution_receipts

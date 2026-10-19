@@ -170,16 +170,28 @@ review receipt's revision to match its proposal, and permits action claims
 to reference only approved receipts. The disconnected adapter recomputes the
 canonical revision and rechecks active consent and parent membership at
 execution time.
+Each review receipt also pins the proposal's consent grant version. A consent
+revocation or regrant advances that version, so an older review cannot execute
+after permission changes. The database prevents deletion of consent records,
+updates to approved proposal evidence, and changes to completed claims or
+review and execution receipts by the server role. Composite foreign keys bind
+an execution receipt to its claim's exact assignment, source revision and
+recorded actor.
 
 `api/_lib/schoolAgentPostgresAdapter.ts` now implements the PR #16 transaction
 contract against this review schema. It runs one SERIALIZABLE transaction,
-locks the exact Auth session, owner membership, source, consent, proposal,
-student and review, then writes the claim, assignment and execution receipt
+checks the exact Auth session, locks owner membership, source, consent,
+proposal and student, reads the immutable review receipt, then writes the
+claim, assignment and execution receipt
 atomically. A bounded retry handles PostgreSQL serialization, deadlock and
 lock-timeout conflicts. CI uses a synthetic PostgreSQL login and tests a
 successful approval, repeat execution, cross-family denial, expired session,
 injected assignment failure with full rollback, and concurrent approvals.
 The adapter is not connected to an HTTP route or live credentials.
+Account deletion and erasure need a privileged, reviewed workflow: retained
+review and action records restrict deletion of referenced Auth users,
+approved proposals and their household. No retention policy or erasure
+operation is included in this PR.
 
 The synthetic `service_role` login in CI only exercises grants and transaction
 behavior. The live service-role API key is **not** a PostgreSQL connection

@@ -111,6 +111,7 @@ create table family_os.family_action_proposals (
     and title !~ '[[:cntrl:]]'),
   due_date date not null,
   consent_captured_at timestamptz,
+  consent_grant_version bigint not null default 1 check (consent_grant_version > 0),
   title_confirmed_by_parent boolean not null default false,
   student_confirmed_by_parent boolean not null default false,
   date_confirmed_by_parent boolean not null default false,
@@ -123,11 +124,39 @@ create table family_os.family_action_proposals (
   unique (family_id, id),
   unique (family_id, id, source_id),
   unique (family_id, id, source_id, source_revision),
+  unique (family_id, id, source_id, source_revision, consent_grant_version),
+  unique (family_id, id, source_revision),
   foreign key (family_id, source_id, source_ref_digest)
     references family_os.family_sources(family_id, id, source_ref_digest) on delete cascade,
   foreign key (family_id, student_id)
     references family_os.students(family_id, id) on delete restrict
 );
+
+-- Once a proposal is approved, its evidence cannot be rewritten to match a
+-- later consent grant. The execution adapter makes the sole allowed status
+-- transition from approved to executed.
+create function family_os.school_agent_guard_approved_proposal()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+begin
+  if tg_op = 'DELETE' then
+    if old.status in ('approved','executing','executed') then
+      raise exception 'Reviewed proposal is immutable';
+    end if;
+    return old;
+  end if;
+  if old.status in ('approved','executing','executed') then
+    if old.status <> 'approved' or new.status not in ('approved','executed')
+      or (to_jsonb(new) - 'status') is distinct from (to_jsonb(old) - 'status') then
+      raise exception 'Reviewed proposal is immutable';
+    end if;
+  end if;
+  return new;
+end $$;
+revoke all on function family_os.school_agent_guard_approved_proposal()
+  from public, anon, authenticated;
+create trigger school_agent_approved_proposal_guard
+  before update or delete on family_os.family_action_proposals
+  for each row execute function family_os.school_agent_guard_approved_proposal();
 
 create table family_os.school_agent_source_consents (
   id uuid primary key default gen_random_uuid(),
@@ -135,10 +164,11 @@ create table family_os.school_agent_source_consents (
   source_id uuid not null,
   status text not null default 'pending'
     check (status in ('pending','active','revoked')),
-  authorized_by_auth_id uuid references auth.users(id) on delete set null,
+  authorized_by_auth_id uuid references auth.users(id) on delete restrict,
   granted_at timestamptz,
   revoked_at timestamptz,
   updated_at timestamptz not null default now(),
+  grant_version bigint not null default 1 check (grant_version > 0),
   unique (family_id, id),
   unique (family_id, source_id),
   foreign key (family_id, source_id)
@@ -151,15 +181,37 @@ create table family_os.school_agent_source_consents (
   )
 );
 
+-- Any revocation or regrant advances the epoch. Old proposal approvals remain
+-- bound to their captured epoch and cannot become valid again on reactivation.
+create function family_os.school_agent_bump_consent_version()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+begin
+  if new.status is distinct from old.status
+    or new.granted_at is distinct from old.granted_at
+    or new.revoked_at is distinct from old.revoked_at
+    or new.authorized_by_auth_id is distinct from old.authorized_by_auth_id then
+    new.grant_version := old.grant_version + 1;
+  elsif new.grant_version is distinct from old.grant_version then
+    raise exception 'Consent version is server managed';
+  end if;
+  return new;
+end $$;
+revoke all on function family_os.school_agent_bump_consent_version()
+  from public, anon, authenticated;
+create trigger school_agent_consent_version_before_update
+  before update on family_os.school_agent_source_consents
+  for each row execute function family_os.school_agent_bump_consent_version();
+
 create table family_os.school_agent_review_receipts (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references public.households(id) on delete cascade,
   proposal_id uuid not null,
   source_id uuid not null,
   source_revision text not null check (source_revision ~ '^[0-9a-f]{64}$'),
+  consent_grant_version bigint not null check (consent_grant_version > 0),
   decision text not null check (decision in
     ('approved','rejected','needs_correction','withdrawn')),
-  reviewed_by_auth_id uuid references auth.users(id) on delete set null,
+  reviewed_by_auth_id uuid references auth.users(id) on delete restrict,
   confirmed_title text,
   confirmed_student_id text,
   confirmed_due_date date,
@@ -167,9 +219,12 @@ create table family_os.school_agent_review_receipts (
   unique (family_id, id),
   unique (family_id, id, proposal_id, source_id),
   unique (family_id, id, proposal_id, source_id, decision),
-  foreign key (family_id, proposal_id, source_id, source_revision)
-    references family_os.family_action_proposals(family_id, id, source_id, source_revision)
-    on delete cascade,
+  unique (family_id, id, proposal_id, source_id, decision, source_revision),
+  foreign key (family_id, proposal_id, source_id, source_revision,
+               consent_grant_version)
+    references family_os.family_action_proposals
+      (family_id, id, source_id, source_revision, consent_grant_version)
+    on delete restrict,
   foreign key (family_id, confirmed_student_id)
     references family_os.students(family_id, id) on delete restrict,
   check (confirmed_title is null or
@@ -188,14 +243,17 @@ create table family_os.school_agent_action_claims (
   approved_receipt_id uuid not null,
   approval_decision text not null default 'approved'
     check (approval_decision = 'approved'),
+  source_revision text not null check (source_revision ~ '^[0-9a-f]{64}$'),
   action_kind text not null check (action_kind = 'create_schoolwork_assignment'),
   idempotency_digest text not null check (idempotency_digest ~ '^[0-9a-f]{64}$'),
   status text not null default 'claimed' check (status in ('claimed','executed')),
   assignment_id text,
-  executed_by_auth_id uuid references auth.users(id) on delete set null,
+  executed_by_auth_id uuid references auth.users(id) on delete restrict,
   executed_at timestamptz,
   created_at timestamptz not null default now(),
   unique (family_id, id),
+  unique (family_id, id, assignment_id, source_revision,
+          executed_by_auth_id, status),
   unique (family_id, source_id, action_kind),
   unique (family_id, proposal_id, action_kind),
   unique (family_id, idempotency_digest),
@@ -203,9 +261,12 @@ create table family_os.school_agent_action_claims (
     references family_os.family_sources(family_id, id) on delete cascade,
   foreign key (family_id, proposal_id)
     references family_os.family_action_proposals(family_id, id) on delete cascade,
-  foreign key (family_id, approved_receipt_id, proposal_id, source_id, approval_decision)
+  foreign key (family_id, proposal_id, source_revision)
+    references family_os.family_action_proposals(family_id, id, source_revision),
+  foreign key (family_id, approved_receipt_id, proposal_id, source_id,
+               approval_decision, source_revision)
     references family_os.school_agent_review_receipts
-      (family_id, id, proposal_id, source_id, decision),
+      (family_id, id, proposal_id, source_id, decision, source_revision),
   check (status <> 'executed' or
     (assignment_id is not null and executed_by_auth_id is not null
       and executed_at is not null))
@@ -215,17 +276,38 @@ create table family_os.school_agent_execution_receipts (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references public.households(id) on delete cascade,
   claim_id uuid not null,
+  claim_status text not null default 'executed' check (claim_status = 'executed'),
   assignment_id text not null,
   source_revision text not null check (source_revision ~ '^[0-9a-f]{64}$'),
   actor_auth_user_id uuid not null references auth.users(id) on delete restrict,
   executed_at timestamptz not null default now(),
   unique (family_id, id),
   unique (family_id, claim_id),
-  foreign key (family_id, claim_id)
-    references family_os.school_agent_action_claims(family_id, id),
+  foreign key (family_id, claim_id, assignment_id, source_revision,
+               actor_auth_user_id, claim_status)
+    references family_os.school_agent_action_claims
+      (family_id, id, assignment_id, source_revision, executed_by_auth_id,
+       status),
   foreign key (family_id, assignment_id)
     references family_os.assignments(family_id, id)
 );
+
+-- A completed claim is an audit record. It cannot be moved back to claimed
+-- or rewritten after the receipt has been inserted.
+create function family_os.school_agent_guard_executed_claim()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+begin
+  if old.status = 'executed' then
+    raise exception 'Executed claim is immutable';
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end $$;
+revoke all on function family_os.school_agent_guard_executed_claim()
+  from public, anon, authenticated;
+create trigger school_agent_executed_claim_guard
+  before update or delete on family_os.school_agent_action_claims
+  for each row execute function family_os.school_agent_guard_executed_claim();
 
 -- RLS remains fail-closed: no client policies. Also revoke table grants in
 -- case project default privileges grant them to API roles.
@@ -240,8 +322,16 @@ revoke all on family_os.family_sources, family_os.family_action_proposals,
   family_os.school_agent_action_claims, family_os.school_agent_execution_receipts
   from public, anon, authenticated;
 grant select, insert, update, delete on family_os.family_sources,
-  family_os.family_action_proposals, family_os.school_agent_source_consents,
-  family_os.school_agent_review_receipts, family_os.school_agent_action_claims
+  family_os.family_action_proposals,
+  family_os.school_agent_action_claims
+  to service_role;
+-- Default privileges in a shared schema can pre-grant deletion or truncation.
+revoke all on family_os.school_agent_source_consents,
+  family_os.school_agent_review_receipts,
+  family_os.school_agent_execution_receipts from service_role;
+grant select, insert, update on family_os.school_agent_source_consents
+  to service_role;
+grant select, insert on family_os.school_agent_review_receipts
   to service_role;
 grant select, insert on family_os.school_agent_execution_receipts
   to service_role;

@@ -11,6 +11,7 @@ if (process.env.PGHOST !== 'localhost' || process.env.PGDATABASE !== 'fos_uuid_w
 const familyId = '00000000-0000-0000-0000-00000000000a';
 const otherFamily = '00000000-0000-0000-0000-00000000000b';
 const actorId = '00000000-0000-0000-0000-000000000001';
+const otherActorId = '00000000-0000-0000-0000-000000000002';
 const activeSessionId = '00000000-0000-0000-0000-000000000101';
 const expiredSessionId = '00000000-0000-0000-0000-000000000102';
 const consentTime = '2026-10-19T00:00:00.000Z';
@@ -66,9 +67,10 @@ async function seed(index: number, title: string) {
     [proposalId, familyId, sourceId, digest, revision, title, consentTime]);
   await admin.query(`
     insert into family_os.school_agent_review_receipts
-      (id,family_id,proposal_id,source_id,source_revision,decision,
+      (id,family_id,proposal_id,source_id,source_revision,
+       consent_grant_version,decision,
        reviewed_by_auth_id,confirmed_title,confirmed_student_id,confirmed_due_date)
-    values ($1,$2,$3,$4,$5,'approved',$6,$7,'student-a','2026-10-20')`,
+    values ($1,$2,$3,$4,$5,1,'approved',$6,$7,'student-a','2026-10-20')`,
     [approvalId, familyId, proposalId, sourceId, revision, actorId, title]);
   return { familyId, proposalId, approvalId, expectedRevision: revision, sourceId };
 }
@@ -82,10 +84,56 @@ test('server adapter commits once, denies other families and expired sessions', 
     const second = await executeReviewedAssignment(activeBearer, request, adapters);
     assert.deepEqual(second, { ok: true, executed: false,
       reason: 'already_executed', familyId });
+    await assert.rejects(service.query(`
+      update family_os.school_agent_review_receipts
+      set decision='withdrawn' where id=$1`, [request.approvalId]), { code: '42501' });
+    await assert.rejects(service.query(`
+      delete from family_os.school_agent_review_receipts where id=$1`,
+      [request.approvalId]), { code: '42501' });
+    await admin.query(`
+      insert into family_os.assignments
+        (id,family_id,student_id,title,due_date,source)
+      values ('school:synthetic-alternate',$1,'student-a',
+        'Alternate assignment','2026-10-20','manual')`, [familyId]);
+    const executedClaim = await admin.query(`
+      select id::text, source_revision
+      from family_os.school_agent_action_claims where proposal_id=$1`,
+      [request.proposalId]);
+    assert.equal(executedClaim.rows[0].source_revision, request.expectedRevision);
+    await assert.rejects(service.query(`
+      update family_os.school_agent_action_claims
+      set created_at=created_at + interval '1 second' where id=$1`,
+      [executedClaim.rows[0].id]), { code: 'P0001' });
+    await assert.rejects(admin.query(`
+      update family_os.school_agent_execution_receipts
+      set assignment_id='school:synthetic-alternate' where claim_id=$1`,
+      [executedClaim.rows[0].id]), { code: '23503' });
+    await assert.rejects(admin.query(`
+      update family_os.school_agent_execution_receipts
+      set source_revision=$1 where claim_id=$2`,
+      ['f'.repeat(64), executedClaim.rows[0].id]), { code: '23503' });
+    await admin.query('insert into auth.users(id) values ($1)', [otherActorId]);
+    await admin.query(`
+      insert into public.profiles(user_id,current_household_id)
+      values ($1,$2)`, [otherActorId, familyId]);
+    await admin.query(`
+      insert into public.household_members(household_id,user_id,role)
+      values ($1,$2,'member')`, [familyId, otherActorId]);
+    await assert.rejects(admin.query(`
+      update family_os.school_agent_execution_receipts
+      set actor_auth_user_id=$1 where claim_id=$2`,
+      [otherActorId, executedClaim.rows[0].id]), { code: '23503' });
     const denied = await executeReviewedAssignment(activeBearer,
       { ...request, familyId: otherFamily }, adapters);
     assert.deepEqual(denied, { ok: false, executed: false, reason: 'membership_denied' });
     const another = await seed(2, 'Science worksheet');
+    await assert.rejects(service.query(`
+      delete from family_os.school_agent_source_consents where source_id=$1`,
+      [another.sourceId]), { code: '42501' });
+    await assert.rejects(service.query(`
+      update family_os.family_action_proposals
+      set consent_grant_version=consent_grant_version + 1 where id=$1`,
+      [another.proposalId]), { code: 'P0001' });
     const expired = await executeReviewedAssignment(expiredBearer, another, adapters);
     assert.deepEqual(expired, { ok: false, executed: false, reason: 'inactive_session' });
     const stale = await executeReviewedAssignment(activeBearer,
@@ -97,6 +145,20 @@ test('server adapter commits once, denies other families and expired sessions', 
     const revoked = await executeReviewedAssignment(activeBearer, another, adapters);
     assert.equal(revoked.executed, false);
     assert.equal(revoked.ok, false);
+    await admin.query(`
+      update family_os.school_agent_source_consents
+      set status='active', revoked_at=null, granted_at=now()
+      where source_id=$1`, [another.sourceId]);
+    const regranted = await executeReviewedAssignment(activeBearer, another, adapters);
+    assert.equal(regranted.executed, false);
+    assert.equal(regranted.ok, false);
+    const regrantState = await admin.query(`
+      select c.grant_version::int as grant_version,
+        (select count(*)::int from family_os.school_agent_action_claims
+         where source_id=$1) as claims
+      from family_os.school_agent_source_consents c where c.source_id=$1`,
+      [another.sourceId]);
+    assert.deepEqual(regrantState.rows[0], { grant_version: 3, claims: 0 });
     const counts = await admin.query(`
       select (select count(*)::int from family_os.assignments where title='Library worksheet') as assignments,
         (select count(*)::int from family_os.school_agent_execution_receipts) as receipts`);
