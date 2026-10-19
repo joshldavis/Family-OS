@@ -204,7 +204,8 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
 
 function retryable(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' &&
-    'code' in error && (error.code === '40001' || error.code === '40P01'));
+    'code' in error && (error.code === '40001' || error.code === '40P01' ||
+      error.code === '55P03'));
 }
 
 export function createSchoolAgentPostgresAdapters(
@@ -216,6 +217,7 @@ export function createSchoolAgentPostgresAdapters(
     runSerializable: async callback => {
       for (let attempt = 0; attempt < 5; attempt++) {
         const client = await pool.connect();
+        let discard = false;
         try {
           await client.query('begin isolation level serializable');
           await client.query("set local statement_timeout = '5s'");
@@ -224,13 +226,16 @@ export function createSchoolAgentPostgresAdapters(
           await client.query('commit');
           return result;
         } catch (error) {
-          if (reportSqlState) reportSqlState(error && typeof error === 'object' &&
-            'code' in error && typeof error.code === 'string' ? error.code : 'non_sql');
-          try { await client.query('rollback'); } catch { /* connection will be discarded */ }
+          try {
+            reportSqlState?.(error && typeof error === 'object' &&
+              'code' in error && typeof error.code === 'string' ? error.code : 'non_sql');
+          } catch { /* diagnostics cannot alter rollback */ }
+          try { await client.query('rollback'); } catch { discard = true; }
           if (!retryable(error) || attempt === 4) throw error;
         } finally {
-          client.release();
+          client.release(discard);
         }
+        await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)));
       }
       throw new Error('Serializable retry limit exceeded');
     },

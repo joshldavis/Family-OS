@@ -88,6 +88,15 @@ test('server adapter commits once, denies other families and expired sessions', 
     const another = await seed(2, 'Science worksheet');
     const expired = await executeReviewedAssignment(expiredBearer, another, adapters);
     assert.deepEqual(expired, { ok: false, executed: false, reason: 'inactive_session' });
+    const stale = await executeReviewedAssignment(activeBearer,
+      { ...another, expectedRevision: 'f'.repeat(64) }, adapters);
+    assert.deepEqual(stale, { ok: false, executed: false, reason: 'stale_source' });
+    await admin.query(`
+      update family_os.school_agent_source_consents
+      set status='revoked', revoked_at=now() where source_id=$1`, [another.sourceId]);
+    const revoked = await executeReviewedAssignment(activeBearer, another, adapters);
+    assert.equal(revoked.executed, false);
+    assert.equal(revoked.ok, false);
     const counts = await admin.query(`
       select (select count(*)::int from family_os.assignments where title='Library worksheet') as assignments,
         (select count(*)::int from family_os.school_agent_execution_receipts) as receipts`);

@@ -21,9 +21,10 @@ file hashes make changes to those draft dependencies fail visibly until
 reviewed. This does not inspect or alter the shared made-again project.
 
 This verifies PostgreSQL DDL and constraints, which the mock adapter tests in
-PR #16 could not verify. It does **not** prove that the real Family OS schema
-matches these synthetic prerequisites, that a real Supabase Auth session can be
-validated, or that the future adapter creates assignments atomically. No remote database, secrets,
+PR #16 could not verify. The later UUID fixture also exercises the concrete
+PostgreSQL adapter end to end. It does **not** prove the live schema fully
+matches these synthetic prerequisites or that a real Supabase Auth session can
+be validated. No remote database, secrets,
 Supabase CLI link, migration history or production deployment is used.
 
 The first fixture intentionally covers only the FOS-004 prerequisites. The
@@ -166,17 +167,34 @@ represented here. No migration has been run against made-again.
 The proposal now stores the reviewed assignment fields and source revision,
 requires the proposal's source digest to match its source row, requires each
 review receipt's revision to match its proposal, and permits action claims
-to reference only approved receipts. The future server still must recompute
-the canonical revision and recheck active consent and parent membership at
+to reference only approved receipts. The disconnected adapter recomputes the
+canonical revision and rechecks active consent and parent membership at
 execution time.
+
+`api/_lib/schoolAgentPostgresAdapter.ts` now implements the PR #16 transaction
+contract against this review schema. It runs one SERIALIZABLE transaction,
+locks the exact Auth session, owner membership, source, consent, proposal,
+student and review, then writes the claim, assignment and execution receipt
+atomically. A bounded retry handles PostgreSQL serialization, deadlock and
+lock-timeout conflicts. CI uses a synthetic PostgreSQL login and tests a
+successful approval, repeat execution, cross-family denial, expired session,
+injected assignment failure with full rollback, and concurrent approvals.
+The adapter is not connected to an HTTP route or live credentials.
+
+The synthetic `service_role` login in CI only exercises grants and transaction
+behavior. The live service-role API key is **not** a PostgreSQL connection
+password. Before deployment, choose and review a server-only database
+connection with narrowly scoped privileges (or a reviewed atomic RPC), test
+the actual connection path in an isolated Supabase environment, and configure
+Preview separately from Production. No database connection secret was added.
 
 The authorized catalog audit also found that `service_role` lacks direct
 `SELECT` on `auth.sessions`. The review proposal includes a narrowly scoped
 `school_agent_session_active(user_id, session_id)` helper that returns only a
 boolean for the exact session and checks `not_after`. Browser roles cannot
 execute it; CI confirms a server-role call distinguishes active and expired
-synthetic sessions without granting that role access to session rows. A future
-server adapter must first verify the signed bearer through Supabase Auth, then
+synthetic sessions without granting that role access to session rows. The
+adapter first verifies the signed bearer through Supabase Auth, then
 extract its `session_id` and call this helper inside the approval transaction.
 This helper has not been installed on made-again or tested against live Auth.
 
@@ -184,12 +202,13 @@ This helper has not been installed on made-again or tested against live Auth.
 
 - Reconcile the existing `family_os` workspace and its membership functions
   with PR #2 source/proposal tables and PR #16 ledger in a disposable database.
-- Implement a server-only adapter for the PR #16 contract with exact bearer
-  session validation, parent membership, consistent row locks and a single
-  SERIALIZABLE transaction. There is currently no execution route.
+- Review and provision a server-only database connection or atomic RPC,
+  then connect the tested adapter behind an authenticated route. The adapter
+  currently has no execution route and no live database credentials.
 - On a verified disposable Supabase clone, test anon/authenticated access,
   revoked sessions and consent, cross-family isolation, concurrent approval
   retries, one assignment plus receipt, and rollback after each injected write
-  failure. The PostgreSQL fixture here checks ledger constraints only.
+  failure. The PostgreSQL fixture exercises the adapter but does not emulate
+  the full Supabase platform.
 - Resolve legacy onboarding policies and sensitive-data retention/erasure
   before any real school source is captured or assignment execution enabled.
