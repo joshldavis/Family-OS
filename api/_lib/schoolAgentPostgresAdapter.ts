@@ -77,7 +77,8 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
         join family_os.school_agent_source_consents c
           on c.family_id = s.family_id and c.source_id = s.id
         where p.family_id = $1::uuid and p.id = $2::uuid
-        for share of p, s, c`, [familyId, proposalId]));
+        for update of p
+        for share of s, c`, [familyId, proposalId]));
       if (!row) return null;
       if (row.source_system !== 'school_email') return null;
       return {
@@ -215,7 +216,7 @@ export function createSchoolAgentPostgresAdapters(
   return {
     auth,
     runSerializable: async callback => {
-      for (let attempt = 0; attempt < 5; attempt++) {
+      for (let attempt = 0; attempt < 7; attempt++) {
         const client = await pool.connect();
         let discard = false;
         try {
@@ -231,11 +232,11 @@ export function createSchoolAgentPostgresAdapters(
               'code' in error && typeof error.code === 'string' ? error.code : 'non_sql');
           } catch { /* diagnostics cannot alter rollback */ }
           try { await client.query('rollback'); } catch { discard = true; }
-          if (!retryable(error) || attempt === 4) throw error;
+          if (!retryable(error) || attempt === 6) throw error;
         } finally {
           client.release(discard);
         }
-        await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)));
+        await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1) ** 2));
       }
       throw new Error('Serializable retry limit exceeded');
     },
