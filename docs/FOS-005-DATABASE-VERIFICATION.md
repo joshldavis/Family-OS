@@ -163,6 +163,22 @@ the fixture does not reproduce all live Auth, membership functions, triggers,
 Data API configuration or Supabase behavior. The full PR #2 intelligence
 schema still needs adaptation and review; only its source/proposal subset is
 represented here. No migration has been run against made-again.
+The proposal now stores the reviewed assignment fields and source revision,
+requires the proposal's source digest to match its source row, requires each
+review receipt's revision to match its proposal, and permits action claims
+to reference only approved receipts. The future server still must recompute
+the canonical revision and recheck active consent and parent membership at
+execution time.
+
+The authorized catalog audit also found that `service_role` lacks direct
+`SELECT` on `auth.sessions`. The review proposal includes a narrowly scoped
+`school_agent_session_active(user_id, session_id)` helper that returns only a
+boolean for the exact session and checks `not_after`. Browser roles cannot
+execute it; CI confirms a server-role call distinguishes active and expired
+synthetic sessions without granting that role access to session rows. A future
+server adapter must first verify the signed bearer through Supabase Auth, then
+extract its `session_id` and call this helper inside the approval transaction.
+This helper has not been installed on made-again or tested against live Auth.
 
 ## Remaining release gates
 

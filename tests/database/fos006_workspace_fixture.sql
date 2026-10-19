@@ -12,6 +12,12 @@ do $$ begin
 end $$;
 create schema auth;
 create table auth.users (id uuid primary key);
+create table auth.sessions (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id),
+  not_after timestamptz
+);
+revoke all on auth.sessions from public, anon, authenticated, service_role;
 create table public.households (id uuid primary key);
 create table public.profiles (
   user_id uuid primary key,
@@ -20,6 +26,7 @@ create table public.profiles (
   created_at timestamptz
 );
 create schema family_os;
+grant usage on schema family_os to authenticated, service_role;
 create function family_os.current_family_id()
 returns uuid language sql stable as $$ select null::uuid $$;
 create function family_os.current_owner_family_id()
@@ -45,3 +52,8 @@ insert into family_os.students values
   ('student-a', '00000000-0000-0000-0000-00000000000a'),
   ('student-b', '00000000-0000-0000-0000-00000000000b');
 insert into auth.users values ('00000000-0000-0000-0000-000000000001');
+insert into auth.sessions values
+  ('00000000-0000-0000-0000-000000000101',
+   '00000000-0000-0000-0000-000000000001',null),
+  ('00000000-0000-0000-0000-000000000102',
+   '00000000-0000-0000-0000-000000000001','2020-01-01');

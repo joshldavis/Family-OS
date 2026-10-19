@@ -38,6 +38,7 @@ begin
     )
     or to_regprocedure('family_os.current_family_id()') is null
     or to_regprocedure('family_os.current_owner_family_id()') is null
+    or to_regclass('auth.sessions') is null
   then
     raise exception 'FOS-006 requires the reviewed UUID family_os workspace';
   end if;
@@ -52,6 +53,25 @@ begin
     raise exception 'FOS-006 target already exists; reconcile before applying';
   end if;
 end $$;
+
+-- The service role cannot SELECT auth.sessions in the shared project. This
+-- read-only helper is owned by the migration owner and reveals one boolean,
+-- never a session row. The caller must first verify the signed bearer with
+-- Supabase Auth and extract that exact token's session_id; user/session IDs
+-- supplied directly by the browser are never sufficient authorization.
+create function family_os.school_agent_session_active(
+  p_user_id uuid, p_session_id uuid
+) returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from auth.sessions s
+    where s.id = p_session_id and s.user_id = p_user_id
+      and (s.not_after is null or s.not_after > now())
+  )
+$$;
+revoke all on function family_os.school_agent_session_active(uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function family_os.school_agent_session_active(uuid, uuid)
+  to service_role;
 
 -- Metadata only. Raw school messages and documents belong in a separate,
 -- consented storage design. Direct browser access is denied.

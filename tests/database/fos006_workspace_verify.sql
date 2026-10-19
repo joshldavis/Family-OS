@@ -9,6 +9,14 @@ declare
   receipt_a uuid := '00000000-0000-0000-0000-000000000031';
   blocked boolean;
 begin
+  if has_table_privilege('service_role','auth.sessions','SELECT')
+    or has_function_privilege('authenticated',
+      'family_os.school_agent_session_active(uuid,uuid)','EXECUTE')
+    or has_function_privilege('anon',
+      'family_os.school_agent_session_active(uuid,uuid)','EXECUTE')
+    or not has_function_privilege('service_role',
+      'family_os.school_agent_session_active(uuid,uuid)','EXECUTE')
+  then raise exception 'session helper privileges are unsafe'; end if;
   if exists (
     select 1 from pg_catalog.pg_class c
     join pg_catalog.pg_namespace n on n.oid = c.relnamespace

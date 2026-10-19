@@ -73,6 +73,8 @@ jobs:
           PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f tests/database/fos006_workspace_fixture.sql
           PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql
           PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f tests/database/fos006_workspace_verify.sql
+          test "$(PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -Atc "set role service_role; select family_os.school_agent_session_active('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101')" | tail -1)" = t
+          test "$(PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -Atc "set role service_role; select family_os.school_agent_session_active('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000102')" | tail -1)" = f
           if psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql >/dev/null 2>&1; then
             echo 'UUID workspace proposal accepted the incompatible legacy fixture' >&2
             exit 1
