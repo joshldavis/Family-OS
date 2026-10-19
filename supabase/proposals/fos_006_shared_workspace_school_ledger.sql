@@ -62,9 +62,11 @@ create table family_os.family_sources (
     ('manual','email','document','calendar','school_portal','integration','agent','import','system')),
   source_system text not null default 'family_os',
   external_ref text,
+  source_ref_digest text check (source_ref_digest ~ '^[0-9a-f]{64}$'),
   content_hash text,
   captured_at timestamptz not null default now(),
-  unique (family_id, id)
+  unique (family_id, id),
+  unique (family_id, id, source_ref_digest)
 );
 create unique index family_os_sources_external_ref_uidx
   on family_os.family_sources(family_id, source_system, external_ref)
@@ -74,14 +76,30 @@ create table family_os.family_action_proposals (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references public.households(id) on delete cascade,
   source_id uuid not null,
+  source_ref_digest text not null check (source_ref_digest ~ '^[0-9a-f]{64}$'),
+  source_revision text not null check (source_revision ~ '^[0-9a-f]{64}$'),
   action_kind text not null check (action_kind = 'create_schoolwork_assignment'),
+  student_id text not null,
+  title text not null check (length(title) between 1 and 200
+    and title !~ '[[:cntrl:]]'),
+  due_date date not null,
+  consent_captured_at timestamptz,
+  title_confirmed_by_parent boolean not null default false,
+  student_confirmed_by_parent boolean not null default false,
+  date_confirmed_by_parent boolean not null default false,
   status text not null default 'awaiting_approval' check (status in
     ('awaiting_approval','approved','rejected','executing','executed','cancelled')),
   created_at timestamptz not null default now(),
+  check (status not in ('approved','executing','executed') or
+    (consent_captured_at is not null and title_confirmed_by_parent
+      and student_confirmed_by_parent and date_confirmed_by_parent)),
   unique (family_id, id),
   unique (family_id, id, source_id),
-  foreign key (family_id, source_id)
-    references family_os.family_sources(family_id, id) on delete cascade
+  unique (family_id, id, source_id, source_revision),
+  foreign key (family_id, source_id, source_ref_digest)
+    references family_os.family_sources(family_id, id, source_ref_digest) on delete cascade,
+  foreign key (family_id, student_id)
+    references family_os.students(family_id, id) on delete restrict
 );
 
 create table family_os.school_agent_source_consents (
@@ -121,8 +139,10 @@ create table family_os.school_agent_review_receipts (
   reviewed_at timestamptz not null default now(),
   unique (family_id, id),
   unique (family_id, id, proposal_id, source_id),
-  foreign key (family_id, proposal_id, source_id)
-    references family_os.family_action_proposals(family_id, id, source_id) on delete cascade,
+  unique (family_id, id, proposal_id, source_id, decision),
+  foreign key (family_id, proposal_id, source_id, source_revision)
+    references family_os.family_action_proposals(family_id, id, source_id, source_revision)
+    on delete cascade,
   foreign key (family_id, confirmed_student_id)
     references family_os.students(family_id, id) on delete restrict,
   check (confirmed_title is null or
@@ -139,6 +159,8 @@ create table family_os.school_agent_action_claims (
   source_id uuid not null,
   proposal_id uuid not null,
   approved_receipt_id uuid not null,
+  approval_decision text not null default 'approved'
+    check (approval_decision = 'approved'),
   action_kind text not null check (action_kind = 'create_schoolwork_assignment'),
   idempotency_digest text not null check (idempotency_digest ~ '^[0-9a-f]{64}$'),
   status text not null default 'claimed' check (status in ('claimed','executed')),
@@ -154,8 +176,9 @@ create table family_os.school_agent_action_claims (
     references family_os.family_sources(family_id, id) on delete cascade,
   foreign key (family_id, proposal_id)
     references family_os.family_action_proposals(family_id, id) on delete cascade,
-  foreign key (family_id, approved_receipt_id, proposal_id, source_id)
-    references family_os.school_agent_review_receipts(family_id, id, proposal_id, source_id),
+  foreign key (family_id, approved_receipt_id, proposal_id, source_id, approval_decision)
+    references family_os.school_agent_review_receipts
+      (family_id, id, proposal_id, source_id, decision),
   check (status <> 'executed' or
     (assignment_id is not null and executed_by_auth_id is not null
       and executed_at is not null))
