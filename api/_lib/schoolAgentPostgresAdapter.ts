@@ -209,6 +209,7 @@ function retryable(error: unknown): boolean {
 
 export function createSchoolAgentPostgresAdapters(
   auth: SupabaseAuthVerifier, pool: Pick<Pool, 'connect'>,
+  reportSqlState?: (code: string) => void,
 ): SchoolAgentApprovalAdapters {
   return {
     auth,
@@ -223,6 +224,8 @@ export function createSchoolAgentPostgresAdapters(
           await client.query('commit');
           return result;
         } catch (error) {
+          if (reportSqlState) reportSqlState(error && typeof error === 'object' &&
+            'code' in error && typeof error.code === 'string' ? error.code : 'non_sql');
           try { await client.query('rollback'); } catch { /* connection will be discarded */ }
           if (!retryable(error) || attempt === 4) throw error;
         } finally {

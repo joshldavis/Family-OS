@@ -24,6 +24,7 @@ function bearer(sessionId: string): string {
 const activeBearer = bearer(activeSessionId);
 const expiredBearer = bearer(expiredSessionId);
 
+const sqlStates: string[] = [];
 const adapters = createSchoolAgentPostgresAdapters({
   getUser: async token => ({
     data: { user: token === activeBearer.slice(7) || token === expiredBearer.slice(7) ? {
@@ -31,7 +32,7 @@ const adapters = createSchoolAgentPostgresAdapters({
       email_confirmed_at: consentTime, is_anonymous: false,
     } : null }, error: null,
   }),
-}, service);
+}, service, code => sqlStates.push(code));
 
 async function seed(index: number, title: string) {
   const sourceId = `00000000-0000-0000-0000-${String(200 + index).padStart(12, '0')}`;
@@ -76,7 +77,7 @@ test('server adapter commits once, denies other families and expired sessions', 
   try {
     const request = await seed(1, 'Library worksheet');
     const first = await executeReviewedAssignment(activeBearer, request, adapters);
-    assert.equal(first.ok, true, JSON.stringify(first));
+    assert.equal(first.ok, true, JSON.stringify({ first, sqlStates }));
     assert.equal(first.executed, true, JSON.stringify(first));
     const second = await executeReviewedAssignment(activeBearer, request, adapters);
     assert.deepEqual(second, { ok: true, executed: false,
