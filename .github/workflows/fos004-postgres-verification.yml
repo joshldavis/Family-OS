@@ -6,6 +6,9 @@ on:
       - '.github/workflows/fos004-postgres-verification.yml'
       - 'supabase/proposals/fos_004_school_agent_approval_ledger.sql'
       - 'supabase/proposals/fos_006_shared_workspace_school_ledger.sql'
+      - 'api/_lib/schoolAgentPostgresAdapter.ts'
+      - 'package.json'
+      - 'package-lock.json'
       - 'supabase/audits/fos_004_approval_ledger_verify.sql'
       - 'tests/database/**'
       - 'src/lib/schema.sql'
@@ -39,6 +42,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install Node dependencies for adapter integration
+        run: npm ci --ignore-scripts
       - name: Verify disposable target and run synthetic database checks
         shell: bash
         run: |
@@ -73,6 +78,7 @@ jobs:
           PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f tests/database/fos006_workspace_fixture.sql
           PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql
           PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -f tests/database/fos006_workspace_verify.sql
+          PGDATABASE=fos_uuid_workspace node --experimental-strip-types --test tests/database/fos006_adapter.test.ts
           test "$(PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -Atc "set role service_role; select family_os.school_agent_session_active('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101')" | tail -1)" = t
           test "$(PGDATABASE=fos_uuid_workspace psql -X -v ON_ERROR_STOP=1 -Atc "set role service_role; select family_os.school_agent_session_active('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000102')" | tail -1)" = f
           if psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql >/dev/null 2>&1; then

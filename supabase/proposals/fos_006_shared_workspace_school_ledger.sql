@@ -48,11 +48,17 @@ begin
     where n.nspname = 'family_os' and c.relname in (
       'family_sources', 'family_action_proposals',
       'school_agent_source_consents', 'school_agent_review_receipts',
-      'school_agent_action_claims')
+      'school_agent_action_claims', 'school_agent_execution_receipts')
   ) then
     raise exception 'FOS-006 target already exists; reconcile before applying';
   end if;
 end $$;
+
+-- A tenant-bound execution receipt must reference the actual assignment.
+-- This index is on an existing Family OS table and therefore requires a
+-- separate migration review and maintenance plan before any live rollout.
+create unique index family_os_assignments_family_id_id_uidx
+  on family_os.assignments(family_id, id);
 
 -- The service role cannot SELECT auth.sessions in the shared project. This
 -- read-only helper is owned by the migration owner and reveals one boolean,
@@ -61,11 +67,12 @@ end $$;
 -- supplied directly by the browser are never sufficient authorization.
 create function family_os.school_agent_session_active(
   p_user_id uuid, p_session_id uuid
-) returns boolean language sql stable security definer set search_path = '' as $$
+) returns boolean language sql volatile security definer set search_path = '' as $$
   select exists (
     select 1 from auth.sessions s
     where s.id = p_session_id and s.user_id = p_user_id
       and (s.not_after is null or s.not_after > now())
+    for share
   )
 $$;
 revoke all on function family_os.school_agent_session_active(uuid, uuid)
@@ -204,6 +211,22 @@ create table family_os.school_agent_action_claims (
       and executed_at is not null))
 );
 
+create table family_os.school_agent_execution_receipts (
+  id uuid primary key default gen_random_uuid(),
+  family_id uuid not null references public.households(id) on delete cascade,
+  claim_id uuid not null,
+  assignment_id text not null,
+  source_revision text not null check (source_revision ~ '^[0-9a-f]{64}$'),
+  actor_auth_user_id uuid not null references auth.users(id) on delete restrict,
+  executed_at timestamptz not null default now(),
+  unique (family_id, id),
+  unique (family_id, claim_id),
+  foreign key (family_id, claim_id)
+    references family_os.school_agent_action_claims(family_id, id),
+  foreign key (family_id, assignment_id)
+    references family_os.assignments(family_id, id)
+);
+
 -- RLS remains fail-closed: no client policies. Also revoke table grants in
 -- case project default privileges grant them to API roles.
 alter table family_os.family_sources enable row level security;
@@ -211,12 +234,16 @@ alter table family_os.family_action_proposals enable row level security;
 alter table family_os.school_agent_source_consents enable row level security;
 alter table family_os.school_agent_review_receipts enable row level security;
 alter table family_os.school_agent_action_claims enable row level security;
+alter table family_os.school_agent_execution_receipts enable row level security;
 revoke all on family_os.family_sources, family_os.family_action_proposals,
   family_os.school_agent_source_consents, family_os.school_agent_review_receipts,
-  family_os.school_agent_action_claims from public, anon, authenticated;
+  family_os.school_agent_action_claims, family_os.school_agent_execution_receipts
+  from public, anon, authenticated;
 grant select, insert, update, delete on family_os.family_sources,
   family_os.family_action_proposals, family_os.school_agent_source_consents,
   family_os.school_agent_review_receipts, family_os.school_agent_action_claims
+  to service_role;
+grant select, insert on family_os.school_agent_execution_receipts
   to service_role;
 
 commit;
