@@ -51,7 +51,8 @@ credential, production route, merge, or production deployment.
 1. Reconcile and pin the existing shared `family_os` workspace migration and
    membership functions. FOS-006 and FOS-007 are review proposals, not
    ready-to-run migrations.
-2. Review retention and account erasure for immutable approval records.
+2. Decide retention and account erasure for immutable approval records;
+   `FOS-007-ERASURE-GATE.md` records the tested blockers and required workflow.
 3. Compare the Vercel server-side URL with the confirmed project reference
    through the runtime guard, review production environment settings, and
    only then add an authenticated route behind an explicit activation flag.
