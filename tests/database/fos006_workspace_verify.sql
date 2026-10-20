@@ -44,6 +44,11 @@ begin
   if has_table_privilege('service_role',
       'family_os.school_agent_source_consents','DELETE')
   then raise exception 'service_role can delete consent history'; end if;
+  if has_table_privilege('service_role',
+      'family_os.school_agent_erasure_marks','INSERT')
+    or has_table_privilege('authenticated',
+      'family_os.school_agent_erasure_marks','SELECT')
+  then raise exception 'erasure fence privileges are unsafe'; end if;
 
   insert into family_os.family_sources(id,family_id,origin_kind,source_system,source_ref_digest) values
     (source_a,a,'email','school_email',repeat('a',64)),

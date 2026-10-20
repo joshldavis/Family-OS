@@ -90,6 +90,11 @@ test('invalid identity, session and RPC responses fail before any assignment res
     assignmentId: 'school:synthetic', actionReceiptId: receiptId }, error: null }));
   assert.deepEqual(await executeReviewedAssignmentViaRpc(authorization,
     request, wrongFamily), { ok: false, executed: false, reason: 'transaction_failed' });
+  const erasing = adapters(async () => ({ data: {
+    ok: false, executed: false, reason: 'family_erasing',
+  }, error: null }));
+  assert.deepEqual(await executeReviewedAssignmentViaRpc(authorization,
+    request, erasing), { ok: false, executed: false, reason: 'family_erasing' });
 });
 
 test('serialization conflict retries the whole RPC with identical arguments', async () => {

@@ -7,6 +7,7 @@ on:
       - 'supabase/config.toml'
       - 'supabase/proposals/fos_006_shared_workspace_school_ledger.sql'
       - 'supabase/proposals/fos_007_school_agent_rpc.sql'
+      - 'supabase/proposals/fos_008_school_agent_erasure.sql'
       - 'tests/database/fos007_local_supabase*'
       - 'api/_lib/schoolAgentRpcExecutor.ts'
       - 'api/_lib/verifiedIdentity.ts'
@@ -60,6 +61,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f tests/database/fos007_local_supabase_fixture.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_007_school_agent_rpc.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_008_school_agent_erasure.sql
       - name: Verify local Auth, Data API, and RPC boundary
         shell: bash
         env:

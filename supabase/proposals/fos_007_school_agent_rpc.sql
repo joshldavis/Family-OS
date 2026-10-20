@@ -107,6 +107,10 @@ begin
   if not found then
     return jsonb_build_object('ok',false,'executed',false,'reason','membership_denied');
   end if;
+  if exists (select 1 from family_os.school_agent_erasure_marks
+             where family_id=p_family_id) then
+    return jsonb_build_object('ok',false,'executed',false,'reason','family_erasing');
+  end if;
 
   select * into v_proposal from family_os.family_action_proposals
   where family_id=p_family_id and id=p_proposal_id for update;

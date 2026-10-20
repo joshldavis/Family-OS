@@ -142,5 +142,21 @@ test('local Supabase Auth and Data API enforce the server-only RPC boundary', as
        where title='Local Auth worksheet') as assignments,
       (select count(*)::int from family_os.school_agent_execution_receipts) as receipts`);
     assert.deepEqual(counts.rows[0], { assignments: 1, receipts: 1 });
+    const erased = await admin.query(
+      'select family_os.school_agent_erase_family($1::uuid) as result', [familyId]);
+    assert.equal(erased.rows[0].result.familyId, familyId);
+    const after = await admin.query(`select
+      (select count(*)::int from family_os.family_sources where family_id=$1) as sources,
+      (select count(*)::int from family_os.family_action_proposals where family_id=$1) as proposals,
+      (select count(*)::int from family_os.school_agent_review_receipts where family_id=$1) as reviews,
+      (select count(*)::int from family_os.school_agent_action_claims where family_id=$1) as claims,
+      (select count(*)::int from family_os.school_agent_execution_receipts where family_id=$1) as receipts,
+      (select count(*)::int from family_os.assignments where family_id=$1) as assignments,
+      (select count(*)::int from family_os.school_agent_erasure_marks where family_id=$1) as marks`,
+    [familyId]);
+    assert.deepEqual(after.rows[0], {
+      sources: 0, proposals: 0, reviews: 0, claims: 0,
+      receipts: 0, assignments: 0, marks: 1,
+    });
   } finally { await admin.end(); }
 });

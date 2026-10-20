@@ -110,6 +110,7 @@ export type SchoolAgentExecuteResult =
   | {
       ok: false; executed: false; reason:
         'invalid_request' | 'invalid_identity' | 'inactive_session' | 'membership_denied' |
+        'family_erasing' |
         'source_not_found' | 'stale_source' | 'consent_denied' |
         'unconfirmed_assignment' | 'student_not_verified' |
         'approval_denied' | 'duplicate_pending' | 'transaction_failed';
