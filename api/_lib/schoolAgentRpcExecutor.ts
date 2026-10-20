@@ -66,7 +66,7 @@ function validResult(value: unknown, familyId: string): SchoolAgentExecuteResult
     return { ok: true, executed: false, reason: 'already_executed', familyId };
   }
   const allowed = new Set([
-    'invalid_request','inactive_session','membership_denied','source_not_found',
+    'invalid_request','inactive_session','membership_denied','family_erasing','source_not_found',
     'stale_source','consent_denied','unconfirmed_assignment',
     'student_not_verified','approval_denied','duplicate_pending',
   ]);

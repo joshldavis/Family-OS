@@ -48,7 +48,8 @@ begin
     where n.nspname = 'family_os' and c.relname in (
       'family_sources', 'family_action_proposals',
       'school_agent_source_consents', 'school_agent_review_receipts',
-      'school_agent_action_claims', 'school_agent_execution_receipts')
+      'school_agent_action_claims', 'school_agent_execution_receipts',
+      'school_agent_erasure_marks')
   ) then
     raise exception 'FOS-006 target already exists; reconcile before applying';
   end if;
@@ -99,6 +100,13 @@ create unique index family_os_sources_external_ref_uidx
   on family_os.family_sources(family_id, source_system, external_ref)
   where external_ref is not null;
 
+-- A short-lived deletion fence. It is removed when the household itself is
+-- erased; it contains no school content or child identifier.
+create table family_os.school_agent_erasure_marks (
+  family_id uuid primary key references public.households(id) on delete cascade,
+  started_at timestamptz not null default now()
+);
+
 create table family_os.family_action_proposals (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references public.households(id) on delete cascade,
@@ -140,7 +148,11 @@ returns trigger language plpgsql security invoker set search_path = '' as $$
 begin
   if tg_op = 'DELETE' then
     if old.status in ('approved','executing','executed') then
-      raise exception 'Reviewed proposal is immutable';
+      if current_user <> 'postgres' or
+        current_setting('family_os.erasing_family', true) is distinct from
+          old.family_id::text then
+        raise exception 'Reviewed proposal is immutable';
+      end if;
     end if;
     return old;
   end if;
@@ -298,7 +310,11 @@ create function family_os.school_agent_guard_executed_claim()
 returns trigger language plpgsql security invoker set search_path = '' as $$
 begin
   if old.status = 'executed' then
-    raise exception 'Executed claim is immutable';
+    if tg_op <> 'DELETE' or current_user <> 'postgres' or
+      current_setting('family_os.erasing_family', true) is distinct from
+        old.family_id::text then
+      raise exception 'Executed claim is immutable';
+    end if;
   end if;
   if tg_op = 'DELETE' then return old; end if;
   return new;
@@ -317,10 +333,14 @@ alter table family_os.school_agent_source_consents enable row level security;
 alter table family_os.school_agent_review_receipts enable row level security;
 alter table family_os.school_agent_action_claims enable row level security;
 alter table family_os.school_agent_execution_receipts enable row level security;
+alter table family_os.school_agent_erasure_marks enable row level security;
 revoke all on family_os.family_sources, family_os.family_action_proposals,
   family_os.school_agent_source_consents, family_os.school_agent_review_receipts,
   family_os.school_agent_action_claims, family_os.school_agent_execution_receipts
   from public, anon, authenticated;
+revoke all on family_os.school_agent_erasure_marks
+  from public, anon, authenticated, service_role;
+grant select on family_os.school_agent_erasure_marks to service_role;
 grant select, insert, update, delete on family_os.family_sources,
   family_os.family_action_proposals,
   family_os.school_agent_action_claims
