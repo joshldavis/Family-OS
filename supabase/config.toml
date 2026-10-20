@@ -1,0 +1,16 @@
+# Disposable local stack only. Never link this directory to a hosted project.
+project_id = "family-os-isolated"
+
+[api]
+port = 54321
+schemas = ["public", "graphql_public"]
+
+[db]
+port = 54322
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[auth.email]
+enable_confirmations = false

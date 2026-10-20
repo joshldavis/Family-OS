@@ -46,6 +46,7 @@ jobs:
       - run: node --experimental-strip-types --test src/learning-support/decisionInbox.test.ts src/learning-support/decisionInbox.safety.test.ts
       - run: node --experimental-strip-types --test api/_lib/verifiedIdentity.test.ts api/_lib/schoolAgentApprovalPreview.test.ts src/intelligence/captureCandidates.test.ts src/intelligence/schoolAgentSandbox.safety.test.ts
       - run: node --experimental-strip-types --test api/_lib/schoolAgentApprovalTransaction.test.ts tests/security/fos004Ledger.test.mjs
+      - run: node --experimental-strip-types --test api/_lib/schoolAgentRpcExecutor.test.ts
       - run: node --experimental-strip-types --test src/intelligence/syntheticReviewLoop.test.ts
       - run: node --experimental-strip-types --test src/modes/noBackgroundAutoStart.test.ts
       - run: node --experimental-strip-types --test src/modes/resolver.test.ts src/modes/storage.test.ts src/learning-support/summary.test.ts
