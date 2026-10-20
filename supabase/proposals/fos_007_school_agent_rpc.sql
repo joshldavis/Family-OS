@@ -23,7 +23,7 @@ create function family_os.school_agent_proposal_revision(
   p_date date, p_student_id text, p_consent_captured_at timestamptz,
   p_title_confirmed boolean, p_student_confirmed boolean,
   p_date_confirmed boolean
-) returns text language sql immutable security invoker set search_path = '' as $$
+) returns text language sql stable security invoker set search_path = '' as $$
   select encode(sha256(convert_to('[' || array_to_string(array[
     to_json('family-os-school-proposal-v1'::text)::text,
     to_json(p_id::text)::text,
@@ -32,7 +32,7 @@ create function family_os.school_agent_proposal_revision(
     to_json(p_source_ref_digest)::text,
     to_json('assignment'::text)::text,
     to_json(p_title)::text,
-    coalesce(to_json(p_date::text)::text, 'null'),
+    coalesce(to_json(to_char(p_date, 'YYYY-MM-DD'))::text, 'null'),
     coalesce(to_json(p_student_id)::text, 'null'),
     to_json('ready_for_review'::text)::text,
     coalesce(to_json(to_char(p_consent_captured_at at time zone 'UTC',
@@ -88,6 +88,7 @@ declare
 begin
   if p_actor_auth_id is null or p_session_id is null or p_family_id is null
     or p_proposal_id is null or p_approval_id is null
+    or p_expected_revision is null
     or p_expected_revision !~ '^[0-9a-f]{64}$' then
     return jsonb_build_object('ok',false,'executed',false,'reason','invalid_request');
   end if;

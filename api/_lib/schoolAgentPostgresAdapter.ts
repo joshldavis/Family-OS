@@ -5,7 +5,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
-import { parseBearerToken, type SupabaseAuthVerifier } from './verifiedIdentity.ts';
+import { verifiedBearerSessionId, type SupabaseAuthVerifier } from './verifiedIdentity.ts';
 import type {
   SchoolAgentActionClaim, SchoolAgentApprovalAdapters, SchoolAgentExecutionTx,
   TrustedLockedReview, TrustedLockedSource,
@@ -14,18 +14,6 @@ import type { TrustedHouseholdMembership, TrustedSchoolProposal } from './school
 
 type Row = Record<string, unknown>;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function exactSessionId(header: string): string | null {
-  const token = parseBearerToken(header);
-  if (!token) return null;
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Row;
-    return typeof payload.session_id === 'string' && uuid.test(payload.session_id)
-      ? payload.session_id : null;
-  } catch { return null; }
-}
 
 function iso(value: unknown): string | null {
   if (value == null) return null;
@@ -42,7 +30,7 @@ function databaseTx(client: PoolClient): SchoolAgentExecutionTx {
   let claimedId: string | null = null;
   return {
     activeSession: async (authUserId, header) => {
-      const sessionId = exactSessionId(header);
+      const sessionId = verifiedBearerSessionId(header);
       if (!sessionId || !uuid.test(authUserId)) return false;
       const row = first(await client.query(
         'select family_os.school_agent_session_active($1::uuid,$2::uuid) as active',

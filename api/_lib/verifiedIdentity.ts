@@ -33,6 +33,21 @@ export function parseBearerToken(header: string | null | undefined): string | nu
   return match?.[1] ?? null;
 }
 
+/** Decode only after getUser(token) has verified this same bearer with Auth. */
+export function verifiedBearerSessionId(header: string | null | undefined): string | null {
+  const token = parseBearerToken(header);
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as
+      Record<string, unknown>;
+    return typeof payload.session_id === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        .test(payload.session_id) ? payload.session_id : null;
+  } catch { return null; }
+}
+
 /**
  * Confirm a real, non-anonymous, email-verified Supabase Auth user.
  * An Auth identity alone must not be treated as household membership.

@@ -89,6 +89,18 @@ test('service-only atomic RPC preserves approval checks and one assignment', asy
         as revision`, [vector.proposalId, familyId, '1'.padStart(64, '0'),
         'Read "é" & 🐢', '2026-10-20', 'student-a', consentTime]);
     assert.equal(sqlRevision.rows[0].revision, vector.expectedRevision);
+    const dateStyleClient = await service.connect();
+    try {
+      await dateStyleClient.query('begin');
+      await dateStyleClient.query("set local datestyle = 'SQL, MDY'");
+      const alternateStyle = await dateStyleClient.query(`
+        select family_os.school_agent_proposal_revision(
+          $1::uuid,$2::uuid,$3,$4,$5::date,$6,$7::timestamptz,true,true,true)
+          as revision`, [vector.proposalId, familyId, '1'.padStart(64, '0'),
+          'Read "é" & 🐢', '2026-10-20', 'student-a', consentTime]);
+      assert.equal(alternateStyle.rows[0].revision, vector.expectedRevision);
+      await dateStyleClient.query('rollback');
+    } finally { dateStyleClient.release(); }
     const sqlDigest = await service.query(`
       select family_os.school_agent_action_digest($1::uuid,$2::uuid) as digest`,
       [familyId, vector.sourceId]);
