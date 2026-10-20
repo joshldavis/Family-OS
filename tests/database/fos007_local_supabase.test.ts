@@ -131,7 +131,12 @@ test('local Supabase Auth and Data API enforce the server-only RPC boundary', as
     const signOut = await service.auth.admin.signOut(token, 'global');
     assert.equal(signOut.error, null, signOut.error?.message);
     const revoked = await executeReviewedAssignmentViaRpc(authorization, request, adapters);
-    assert.deepEqual(revoked, { ok: false, executed: false, reason: 'inactive_session' });
+    assert.deepEqual(revoked, { ok: false, executed: false, reason: 'invalid_identity' });
+    const directRevoked = await service.rpc('school_agent_execute_reviewed_assignment', params);
+    assert.equal(directRevoked.error, null);
+    assert.deepEqual(directRevoked.data, {
+      ok: false, executed: false, reason: 'inactive_session',
+    });
     const counts = await admin.query(`select
       (select count(*)::int from family_os.assignments
        where title='Local Auth worksheet') as assignments,
