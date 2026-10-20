@@ -28,6 +28,29 @@ begin
         and a.attname = 'family_id' and not a.attisdropped
         and a.atttypid = 'uuid'::regtype
     )
+    or exists (
+      select 1 from (values
+        ('id','text'), ('student_id','text'), ('title','text'),
+        ('due_date','date'), ('source','text'), ('subject','text'),
+        ('status','text')) as required(column_name,type_name)
+      where not exists (
+        select 1 from pg_catalog.pg_attribute a
+        where a.attrelid = 'family_os.assignments'::regclass
+          and a.attname = required.column_name and not a.attisdropped
+          and pg_catalog.format_type(a.atttypid,a.atttypmod) = required.type_name
+      )
+    )
+    or exists (
+      select 1 from (values ('subject'),('status')) as required(column_name)
+      where not exists (
+        select 1 from pg_catalog.pg_attribute a
+        join pg_catalog.pg_attrdef d
+          on d.adrelid=a.attrelid and d.adnum=a.attnum
+        where a.attrelid = 'family_os.assignments'::regclass
+          and a.attname=required.column_name and a.attnotnull
+          and not a.attisdropped
+      )
+    )
     or not exists (
       select 1 from pg_catalog.pg_class c
       where c.oid = 'family_os.students'::regclass and c.relrowsecurity

@@ -33,9 +33,10 @@ synthetic Auth user and School Agent action.
 
 Release limits:
 
-- FOS-006, FOS-007 and FOS-008 remain review-only SQL proposals. The actual
-  made-again schema and any other tables referencing assignments/households
-  need a catalog-only dependency audit before migration planning.
+- FOS-006, FOS-007 and FOS-008 remain review-only SQL proposals. The
+  owner-authorized catalog-only audit in `FOS-009-SHARED-CATALOG-GATE.md`
+  confirmed assignment compatibility and identified household deletion gaps.
+  The complete shared schema still needs an isolated deletion rehearsal.
 - External school messages, uploads, logs, backups, and provider copies need
   separate deletion and backup-expiry procedures. Do not claim complete
   account erasure from a database-only result.

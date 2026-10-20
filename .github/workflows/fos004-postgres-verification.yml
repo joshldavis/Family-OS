@@ -93,3 +93,15 @@ jobs:
             exit 1
           fi
           psql -X -v ON_ERROR_STOP=1 -Atc "select to_regclass('family_os.family_sources') is null" | grep -qx t
+      - name: Reject assignment schema drift before any proposal writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb fos_assignment_drift
+          PGDATABASE=fos_assignment_drift psql -X -v ON_ERROR_STOP=1 -f tests/database/fos006_workspace_fixture.sql
+          PGDATABASE=fos_assignment_drift psql -X -v ON_ERROR_STOP=1 -c 'alter table family_os.assignments alter column subject drop default'
+          if PGDATABASE=fos_assignment_drift psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql >/dev/null 2>&1; then
+            echo 'School ledger accepted incompatible assignment schema' >&2
+            exit 1
+          fi
+          PGDATABASE=fos_assignment_drift psql -X -v ON_ERROR_STOP=1 -Atc "select to_regclass('family_os.family_sources') is null" | grep -qx t

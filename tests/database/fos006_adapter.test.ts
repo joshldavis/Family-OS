@@ -94,7 +94,7 @@ test('server adapter commits once, denies other families and expired sessions', 
       insert into family_os.assignments
         (id,family_id,student_id,title,due_date,source)
       values ('school:synthetic-alternate',$1,'student-a',
-        'Alternate assignment','2026-10-20','manual')`, [familyId]);
+        'Alternate assignment','2026-10-20','Manual')`, [familyId]);
     const executedClaim = await admin.query(`
       select id::text, source_revision
       from family_os.school_agent_action_claims where proposal_id=$1`,

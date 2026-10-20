@@ -48,8 +48,10 @@ create table family_os.assignments (
   family_id uuid not null references public.households(id),
   student_id text not null,
   title text not null,
+  subject text not null default '',
   due_date date not null,
-  source text,
+  status text not null default 'Not Started',
+  source text check (source in ('Manual','Import','AI')),
   foreign key (family_id, student_id)
     references family_os.students(family_id, id)
 );
