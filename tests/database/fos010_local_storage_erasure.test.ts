@@ -33,6 +33,17 @@ test('local Storage API removes one household and retains another', async () => 
       { contentType: 'image/jpeg' });
     assert.equal(error, null, error?.message);
   }
+  const listed = await bucket.listV2({ prefix: `${family}/`, with_delimiter: false });
+  assert.equal(listed.error, null, listed.error?.message);
+  assert.equal(listed.data?.objects.length, 2);
+  assert.ok(listed.data.objects.every(object =>
+    [object.key, object.name].some(value =>
+      value?.startsWith(`${family}/`) || value?.startsWith(`captures/${family}/`))),
+  `Local Storage returned paths in an unexpected shape: ${JSON.stringify(listed.data.objects.map(object => ({
+    keyPresent: !!object.key, keyHasBucket: object.key?.startsWith('captures/'),
+    keyHasFamily: object.key?.includes(family), nameHasFamily: object.name.includes(family),
+    nameHasSlash: object.name.includes('/'),
+  })))}`);
   assert.deepEqual(await eraseHouseholdCaptureStorage(family, bucket), { removed: 2 });
   const remaining = await bucket.listV2({ prefix: `${other}/`, with_delimiter: false });
   assert.equal(remaining.error, null, remaining.error?.message);

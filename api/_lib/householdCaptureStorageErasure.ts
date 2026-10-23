@@ -20,8 +20,9 @@ async function listHouseholdPaths(bucket: StorageBucket, prefix: string): Promis
     for (const object of result.data.objects) {
       // Only the full key proves the object belongs to this exact household prefix.
       // Storage list-v2 keys can include the bucket name; remove() takes a bucket-relative path.
-      const path = object.key?.startsWith('captures/')
-        ? object.key.slice('captures/'.length) : object.key;
+      const fullPath = object.key ?? object.name;
+      const path = fullPath.startsWith('captures/')
+        ? fullPath.slice('captures/'.length) : fullPath;
       if (!path || !path.startsWith(prefix) || path === prefix) {
         throw new Error('Capture Storage returned an unsafe object path');
       }
