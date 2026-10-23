@@ -48,5 +48,6 @@ test('local Storage API removes one household and retains another', async () => 
   const remaining = await bucket.listV2({ prefix: `${other}/`, with_delimiter: false });
   assert.equal(remaining.error, null, remaining.error?.message);
   assert.equal(remaining.data?.objects.length, 1);
-  assert.ok(remaining.data?.objects[0].key?.endsWith(`${other}/photo.jpg`));
+  assert.ok([remaining.data?.objects[0].key, remaining.data?.objects[0].name].some(value =>
+    value === `${other}/photo.jpg` || value === `captures/${other}/photo.jpg`));
 });
