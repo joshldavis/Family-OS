@@ -33,3 +33,14 @@ test('rejects a listing that escapes the exact household prefix before removal',
   await assert.rejects(eraseHouseholdCaptureStorage(family, bucket), /unsafe object path/);
   assert.equal(removed, false);
 });
+
+test('accepts a Storage key qualified by the captures bucket', async () => {
+  let remaining = true;
+  const bucket = {
+    async listV2() { return { data: { objects: remaining
+      ? [{ key: `captures/${family}/photo.jpg`, name: 'photo.jpg' }] : [], hasNext: false }, error: null }; },
+    async remove(paths: string[]) { assert.deepEqual(paths, [`${family}/photo.jpg`]);
+      remaining = false; return { data: [], error: null }; },
+  };
+  assert.deepEqual(await eraseHouseholdCaptureStorage(family, bucket), { removed: 1 });
+});

@@ -36,5 +36,6 @@ test('local Storage API removes one household and retains another', async () => 
   assert.deepEqual(await eraseHouseholdCaptureStorage(family, bucket), { removed: 2 });
   const remaining = await bucket.listV2({ prefix: `${other}/`, with_delimiter: false });
   assert.equal(remaining.error, null, remaining.error?.message);
-  assert.deepEqual(remaining.data?.objects.map(object => object.key), [`${other}/photo.jpg`]);
+  assert.equal(remaining.data?.objects.length, 1);
+  assert.ok(remaining.data?.objects[0].key?.endsWith(`${other}/photo.jpg`));
 });
