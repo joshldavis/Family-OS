@@ -1,5 +1,5 @@
 /**
- * Daily Agenda overnight cron — runs at 5am ET (9am UTC) via Vercel Cron.
+ * Daily Agenda overnight cron — disabled pending shared database review.
  *
  * For every family in Supabase, for every child profile, generates today's
  * joke + fact using the shared Gemini API key and upserts the result into
@@ -12,12 +12,17 @@
  *   - SUPABASE_URL                same as VITE_SUPABASE_URL
  *   - SUPABASE_SERVICE_ROLE_KEY   service role, NOT the anon key — bypasses RLS
  *
- * Manual trigger for testing:
- *   curl -H "Authorization: Bearer $CRON_SECRET" https://your-app.vercel.app/api/cron/daily-agenda
+ * Re-enabling requires a reviewed source change after the target and schema
+ * are verified. An environment variable alone cannot enable this job.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI, Type } from '@google/genai';
+
+// The legacy job queries generic public tables with a service-role key. The
+// confirmed shared project has a different profiles schema; no remote target
+// or database reads are safe until the job is redesigned and reviewed.
+const DAILY_AGENDA_RELEASE_APPROVED: boolean = false;
 
 // Vercel Functions config — give the cron up to 60s to chew through families.
 export const config = {
@@ -93,6 +98,12 @@ export default async function handler(req: Request): Promise<Response> {
   const expected = `Bearer ${process.env.CRON_SECRET ?? ''}`;
   if (!process.env.CRON_SECRET || auth !== expected) {
     return new Response('Unauthorized', { status: 401 });
+  }
+
+  if (!DAILY_AGENDA_RELEASE_APPROVED) {
+    return new Response(JSON.stringify({ error: 'Daily agenda is disabled pending database review.' }), {
+      status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
   }
 
   // ── Env ─────────────────────────────────────────────────────────────────

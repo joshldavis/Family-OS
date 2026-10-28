@@ -13,6 +13,8 @@ on:
       - 'src/components/SyntheticReviewPanel.tsx'
       - 'src/intelligence/**'
       - 'api/_lib/**'
+      - 'api/cron/**'
+      - 'vercel.json'
       - 'supabase/proposals/fos_004_school_agent_approval_ledger.sql'
       - 'supabase/audits/fos_004_approval_ledger_verify.sql'
       - 'tests/security/fos004Ledger.test.mjs'
@@ -47,6 +49,7 @@ jobs:
       - run: node --experimental-strip-types --test api/_lib/verifiedIdentity.test.ts api/_lib/schoolAgentApprovalPreview.test.ts src/intelligence/captureCandidates.test.ts src/intelligence/schoolAgentSandbox.safety.test.ts
       - run: node --experimental-strip-types --test api/_lib/schoolAgentApprovalTransaction.test.ts tests/security/fos004Ledger.test.mjs
       - run: node --experimental-strip-types --test api/_lib/schoolAgentRpcExecutor.test.ts
+      - run: node --experimental-strip-types --test api/cron/daily-agenda.safety.test.ts
       - run: node --experimental-strip-types --test src/intelligence/syntheticReviewLoop.test.ts
       - run: node --experimental-strip-types --test src/modes/noBackgroundAutoStart.test.ts
       - run: node --experimental-strip-types --test src/modes/resolver.test.ts src/modes/storage.test.ts src/learning-support/summary.test.ts
