@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { Pool } from 'pg';
+import { Pool, type PoolClient, type QueryResult } from 'pg';
 import { trustedProposalRevision, type TrustedSchoolProposal } from '../../api/_lib/schoolAgentApprovalPreview.ts';
 
 if (process.env.PGHOST !== 'localhost' || process.env.PGDATABASE !== 'fos_uuid_workspace' ||
@@ -26,6 +26,25 @@ async function execute(request: Request, sessionId = activeSessionId) {
     [actorId, sessionId, request.familyId, request.proposalId,
       request.expectedRevision, request.approvalId]);
   return result.rows[0].result as Record<string, unknown>;
+}
+
+async function waitUntilBlocked(blockedPid: number, blockerPid: number) {
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const result = await admin.query(
+      'select $1::int = any(pg_catalog.pg_blocking_pids($2::int)) as blocked',
+      [blockerPid, blockedPid]);
+    if (result.rows[0].blocked) return;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error('Expected transaction to wait for the session lock');
+}
+
+async function rpcOn(client: PoolClient,
+  request: Request, sessionId: string) {
+  return client.query(`select public.school_agent_execute_reviewed_assignment(
+    $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6::uuid) as result`,
+  [actorId, sessionId, request.familyId, request.proposalId,
+    request.expectedRevision, request.approvalId]);
 }
 
 async function seed(index: number, title: string): Promise<Request> {
@@ -174,5 +193,73 @@ test('service-only atomic RPC preserves approval checks and one assignment', asy
          where source_revision=$2) as receipts`,
       [parallel.sourceId, parallel.expectedRevision]);
     assert.deepEqual(counts.rows[0], { assignments: 1, claims: 1, receipts: 1 });
+
+    // If revocation locks the session first, the RPC must wait and then
+    // reject it; no claim or assignment may be created.
+    const revokedFirst = await seed(5, 'Revocation first');
+    const revokedSession = '00000000-0000-0000-0000-000000000105';
+    await admin.query('insert into auth.sessions(id,user_id) values ($1,$2)',
+      [revokedSession, actorId]);
+    const revoker = await admin.connect();
+    const executor = await service.connect();
+    let pendingRpc: ReturnType<typeof rpcOn> | undefined;
+    try {
+      await revoker.query('begin');
+      await revoker.query('delete from auth.sessions where id=$1', [revokedSession]);
+      await executor.query('begin');
+      await executor.query("set local statement_timeout = '8s'");
+      const executorPid = (await executor.query('select pg_backend_pid() as pid')).rows[0].pid as number;
+      const revokerPid = (await revoker.query('select pg_backend_pid() as pid')).rows[0].pid as number;
+      pendingRpc = rpcOn(executor, revokedFirst, revokedSession);
+      void pendingRpc.catch(() => undefined);
+      await waitUntilBlocked(executorPid, revokerPid);
+      await revoker.query('commit');
+      const result = await pendingRpc;
+      assert.deepEqual(result.rows[0].result,
+        { ok: false, executed: false, reason: 'inactive_session' });
+      await executor.query('commit');
+      const remaining = await admin.query(`select
+        (select count(*)::int from family_os.school_agent_action_claims where source_id=$1) as claims,
+        (select count(*)::int from family_os.assignments where title='Revocation first') as assignments`,
+      [revokedFirst.sourceId]);
+      assert.deepEqual(remaining.rows[0], { claims: 0, assignments: 0 });
+    } finally {
+      await revoker.query('rollback').catch(() => undefined);
+      if (pendingRpc) await pendingRpc.catch(() => undefined);
+      await executor.query('rollback').catch(() => undefined);
+      revoker.release(); executor.release();
+    }
+
+    // If the action locks the session first, revocation waits until the
+    // transaction finishes. A subsequent attempt must see the revoked session.
+    const actionFirst = await seed(6, 'Action first');
+    const actionSession = '00000000-0000-0000-0000-000000000106';
+    await admin.query('insert into auth.sessions(id,user_id) values ($1,$2)',
+      [actionSession, actorId]);
+    const actionTx = await service.connect();
+    const revokeTx = await admin.connect();
+    let pendingRevoke: Promise<QueryResult> | undefined;
+    try {
+      await actionTx.query('begin');
+      const result = await rpcOn(actionTx, actionFirst, actionSession);
+      assert.equal(result.rows[0].result.executed, true);
+      await revokeTx.query('begin');
+      await revokeTx.query("set local statement_timeout = '8s'");
+      const actionPid = (await actionTx.query('select pg_backend_pid() as pid')).rows[0].pid as number;
+      const revokePid = (await revokeTx.query('select pg_backend_pid() as pid')).rows[0].pid as number;
+      pendingRevoke = revokeTx.query('delete from auth.sessions where id=$1', [actionSession]);
+      void pendingRevoke.catch(() => undefined);
+      await waitUntilBlocked(revokePid, actionPid);
+      await actionTx.query('commit');
+      await pendingRevoke;
+      await revokeTx.query('commit');
+      assert.deepEqual(await execute(actionFirst, actionSession),
+        { ok: false, executed: false, reason: 'inactive_session' });
+    } finally {
+      await actionTx.query('rollback').catch(() => undefined);
+      if (pendingRevoke) await pendingRevoke.catch(() => undefined);
+      await revokeTx.query('rollback').catch(() => undefined);
+      actionTx.release(); revokeTx.release();
+    }
   } finally { await service.end(); await admin.end(); }
 });
