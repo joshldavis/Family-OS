@@ -48,9 +48,10 @@ When revocation holds the session row first, the action waits and rejects the
 revoked session without creating a claim or assignment. When the action holds
 the row first, revocation waits for that transaction to finish; later actions
 are rejected. This establishes an order for concurrent operations, not an
-instant cancellation of an action that already holds the lock. The test uses a
-synthetic Auth table; the separate Supabase test checks real sign-out
-sequentially, not a concurrent Auth service call.
+instant cancellation of an action that already holds the lock. A separate
+local Supabase test also starts real Auth global sign-out while an RPC
+transaction holds the session lock, checks that sign-out waits, and verifies
+the revoked session is rejected afterward.
 
 No FOS-007 SQL has been run on made-again. There is no migration file, live
 credential, production route, merge, or production deployment.

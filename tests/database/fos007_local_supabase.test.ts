@@ -128,8 +128,42 @@ test('local Supabase Auth and Data API enforce the server-only RPC boundary', as
     assert.deepEqual(repeated, { ok: true, executed: false,
       reason: 'already_executed', familyId });
 
-    const signOut = await service.auth.admin.signOut(token, 'global');
-    assert.equal(signOut.error, null, signOut.error?.message);
+    // Keep the RPC transaction open after it locks the real Auth session.
+    // Global sign-out must wait until this action transaction completes.
+    const actionTx = await admin.connect();
+    let pendingSignOut: ReturnType<typeof service.auth.admin.signOut> | undefined;
+    try {
+      await actionTx.query('begin');
+      await actionTx.query("set local idle_in_transaction_session_timeout = '15s'");
+      await actionTx.query('set local role service_role');
+      const held = await actionTx.query(`select public.school_agent_execute_reviewed_assignment(
+        $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6::uuid) as result`,
+      [params.p_actor_auth_id, params.p_session_id, params.p_family_id,
+        params.p_proposal_id, params.p_expected_revision, params.p_approval_id]);
+      assert.deepEqual(held.rows[0].result, {
+        ok: true, executed: false, reason: 'already_executed', familyId,
+      });
+      const actionPid = (await actionTx.query('select pg_backend_pid() as pid')).rows[0].pid as number;
+      pendingSignOut = service.auth.admin.signOut(token, 'global');
+      void pendingSignOut.catch(() => undefined);
+      let blocked = false;
+      for (let attempt = 0; attempt < 160; attempt++) {
+        const waiting = await admin.query(`select exists (
+          select 1 from pg_catalog.pg_stat_activity
+          where pid <> $1 and $1::int = any(pg_catalog.pg_blocking_pids(pid))
+        ) as blocked`, [actionPid]);
+        if (waiting.rows[0].blocked) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      assert.equal(blocked, true, 'Auth sign-out must wait for the action session lock');
+      await actionTx.query('commit');
+      const signOut = await pendingSignOut;
+      assert.equal(signOut.error, null, signOut.error?.message);
+    } finally {
+      await actionTx.query('rollback').catch(() => undefined);
+      if (pendingSignOut) await pendingSignOut.catch(() => undefined);
+      actionTx.release();
+    }
     const revoked = await executeReviewedAssignmentViaRpc(authorization, request, adapters);
     assert.deepEqual(revoked, { ok: false, executed: false, reason: 'invalid_identity' });
     const directRevoked = await service.rpc('school_agent_execute_reviewed_assignment', params);
