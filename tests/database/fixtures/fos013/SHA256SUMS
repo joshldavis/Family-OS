@@ -1,0 +1,4 @@
+95babb304f39573a6fd6a19aadd63bc6d70a6338cdaa0139d2ae5c21e9493401  tests/database/fixtures/fos013/made-again-0001.sql
+c89799bdc4c57b2131ac4f9dca1336690a070998bbcdcfebfc1fb990e305df5f  tests/database/fixtures/fos013/made-again-0002.sql
+1d631977ec81261ed8680827f7cd4eb742e2375b5bc6b1f02891e56461695d64  tests/database/fixtures/fos013/membership-hardening-candidate.sql
+a978feda129d0f44ebf8e4f8aec1cf17cf81d1970aae70c0039e41c2b2bd090d  tests/database/fixtures/fos013/workspace-candidate.sql
