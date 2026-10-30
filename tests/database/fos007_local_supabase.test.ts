@@ -55,9 +55,9 @@ test('local Supabase Auth and Data API enforce the server-only RPC boundary', as
     const token = signedUp.session.access_token;
     const authorization = `Bearer ${token}`;
 
-    await admin.query(`insert into public.households(id) values ($1)`, [familyId]);
-    await admin.query(`insert into family_os.students(id,family_id)
-      values ('student-a',$1)`, [familyId]);
+    await admin.query(`insert into public.households(id,name) values ($1,'Synthetic family')`, [familyId]);
+    await admin.query(`insert into family_os.students(id,family_id,name)
+      values ('student-a',$1,'Synthetic student')`, [familyId]);
     await admin.query(`insert into public.profiles(user_id,current_household_id)
       values ($1,$2)`, [actorId, familyId]);
     await admin.query(`insert into public.household_members(household_id,user_id,role)

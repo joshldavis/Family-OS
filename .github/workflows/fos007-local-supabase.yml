@@ -9,6 +9,9 @@ on:
       - 'supabase/proposals/fos_007_school_agent_rpc.sql'
       - 'supabase/proposals/fos_008_school_agent_erasure.sql'
       - 'tests/database/fos007_local_supabase*'
+      - 'tests/database/fixtures/fos013/**'
+      - 'tests/database/fos013_catalog_assertions.sql'
+      - 'tests/database/fos013_workspace_access.test.ts'
       - 'tests/database/fos010_*'
       - 'api/_lib/householdCaptureStorageErasure.ts'
       - 'api/_lib/schoolAgentRpcExecutor.ts'
@@ -73,3 +76,62 @@ jobs:
           test -z "${DATABASE_URL:-}"
           FOS_LOCAL_STATUS_FILE="$RUNNER_TEMP/fos007-status.env" node --experimental-strip-types --test tests/database/fos007_local_supabase.test.ts
           FOS_LOCAL_STATUS_FILE="$RUNNER_TEMP/fos007-status.env" node --experimental-strip-types --test tests/database/fos010_local_storage_erasure.test.ts
+
+  workspace-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Start disposable local Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e supabase/.temp/project-ref
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${DATABASE_URL:-}"
+          sha256sum -c tests/database/fixtures/fos013/SHA256SUMS
+          if ! npx --yes supabase@2.117.0 start --exclude realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor >"$RUNNER_TEMP/fos013-start.log" 2>&1; then
+            echo 'Disposable local Supabase failed to start; log withheld because it can contain local keys.' >&2
+            exit 1
+          fi
+          npx --yes supabase@2.117.0 status -o env >"$RUNNER_TEMP/fos013-status.env"
+          chmod 600 "$RUNNER_TEMP/fos013-status.env"
+      - name: Rehearse candidate baseline and review proposals locally
+        shell: bash
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '54322'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = 127.0.0.1
+          test "$PGDATABASE" = postgres
+          test -z "${DATABASE_URL:-}"
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/fixtures/fos013/made-again-0001.sql
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/fixtures/fos013/made-again-0002.sql
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/fixtures/fos013/membership-hardening-candidate.sql
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/fixtures/fos013/workspace-candidate.sql
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/fos013_catalog_assertions.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_006_shared_workspace_school_ledger.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_007_school_agent_rpc.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/proposals/fos_008_school_agent_erasure.sql
+          psql -X -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
+      - name: Verify Auth and approval against the candidate workspace
+        shell: bash
+        env:
+          FOS_LOCAL_SUPABASE_TEST: '1'
+        run: |
+          set -euo pipefail
+          test -z "${DATABASE_URL:-}"
+          FOS_LOCAL_STATUS_FILE="$RUNNER_TEMP/fos013-status.env" node --experimental-strip-types --test tests/database/fos007_local_supabase.test.ts
+          FOS_LOCAL_STATUS_FILE="$RUNNER_TEMP/fos013-status.env" node --experimental-strip-types --test tests/database/fos013_workspace_access.test.ts

@@ -11,7 +11,7 @@ begin
 end $$;
 
 create table public.households (
-  id uuid primary key, is_demo boolean not null default false
+  id uuid primary key, name text not null, is_demo boolean not null default false
 );
 create table public.household_members (
   household_id uuid not null references public.households(id),
@@ -40,6 +40,7 @@ returns uuid language sql stable as $$ select null::uuid $$;
 create table family_os.students (
   id text primary key,
   family_id uuid not null references public.households(id),
+  name text not null,
   unique (family_id,id)
 );
 create table family_os.assignments (
